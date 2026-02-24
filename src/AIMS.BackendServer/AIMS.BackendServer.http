@@ -1,0 +1,6 @@
+@AIMS.BackendServer_HostAddress = http://localhost:5185
+
+GET {{AIMS.BackendServer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
