@@ -1,8 +1,18 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+// Thêm sau builder.Services.AddSession();
 
+// ── DataProtection — persist keys vào Docker Volume ────────
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/app/dataprotection-keys"))
+    .SetApplicationName("AIMS.WebPortal");
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
