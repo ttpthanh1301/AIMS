@@ -10,6 +10,6 @@ public class InternAssignment
 
     public AppUser InternUser { get; set; } = null!;
     public AppUser MentorUser { get; set; } = null!;
-    public InternshipPeriod Period { get; set; } = null!;
+    public Data.Entities.InternshipPeriod Period { get; set; } = null!;
     public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
 }

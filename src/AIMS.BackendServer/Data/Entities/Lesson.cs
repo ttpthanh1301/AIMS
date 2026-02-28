@@ -11,6 +11,6 @@ public class Lesson
     public int SortOrder { get; set; }
     public bool IsRequired { get; set; } = true;
 
-    public CourseChapter Chapter { get; set; } = null!;
+    public Data.Entities.CourseChapter Chapter { get; set; } = null!;
     public ICollection<LessonProgress> Progresses { get; set; } = new List<LessonProgress>();
 }

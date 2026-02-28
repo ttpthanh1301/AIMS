@@ -11,5 +11,5 @@ public class Function
 
     public Function? Parent { get; set; }
     public ICollection<Function> Children { get; set; } = new List<Function>();
-    public ICollection<Permission> Permissions { get; set; } = new List<Permission>();
+    public ICollection<Data.Entities.Permission> Permissions { get; set; } = new List<Permission>();
 }
