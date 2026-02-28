@@ -13,6 +13,6 @@ public class Course
     public DateTime? LastModifiedDate { get; set; }
 
     public AppUser CreatedByUser { get; set; } = null!;
-    public ICollection<CourseChapter> Chapters { get; set; } = new List<CourseChapter>();
+    public ICollection<Data.Entities.CourseChapter> Chapters { get; set; } = new List<CourseChapter>();
     public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
 }

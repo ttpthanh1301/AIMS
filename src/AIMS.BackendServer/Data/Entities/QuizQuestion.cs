@@ -9,6 +9,6 @@ public class QuizQuestion
     public decimal Score { get; set; } = 1;
     public int SortOrder { get; set; }
 
-    public QuizBank QuizBank { get; set; } = null!;
+    public Entities.QuizBank QuizBank { get; set; } = null!;
     public ICollection<QuestionOption> Options { get; set; } = new List<QuestionOption>();
 }
