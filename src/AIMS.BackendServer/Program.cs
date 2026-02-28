@@ -139,7 +139,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowWebPortal");
-app.UseHttpsRedirection();
+// Chỉ dùng HTTPS redirect khi KHÔNG chạy trong Docker
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseAuthentication();   // ← PHẢI trước UseAuthorization
 app.UseAuthorization();
 app.MapControllers();
