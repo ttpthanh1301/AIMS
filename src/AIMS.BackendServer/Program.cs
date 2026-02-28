@@ -13,9 +13,21 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── 1. Database ────────────────────────────────────────────
+// ── Database ──────────────────────────────────────────
 builder.Services.AddDbContext<AimsDbContext>(opts =>
-    opts.UseSqlServer(builder.Configuration
-        .GetConnectionString("DefaultConnection")));
+    opts.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null   // Retry tất cả lỗi transient
+            );
+            sqlOptions.CommandTimeout(60);
+        }
+    )
+);
 
 // ── 2. Identity ────────────────────────────────────────────
 builder.Services.AddIdentity<AppUser, AppRole>(opts =>
@@ -75,14 +87,45 @@ builder.Services.AddCors(opts => opts.AddPolicy("AllowWebPortal", policy =>
 // ── Build ──────────────────────────────────────────────────
 var app = builder.Build();
 
-// ── Seed Data ──────────────────────────────────────────────
+// ── Migration + Seed Data ─────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
     var sv = scope.ServiceProvider;
-    var ctx = sv.GetRequiredService<AimsDbContext>();
+    var logger = sv.GetRequiredService<ILogger<Program>>();
+    var context = sv.GetRequiredService<AimsDbContext>();
     var userMgr = sv.GetRequiredService<UserManager<AppUser>>();
     var roleMgr = sv.GetRequiredService<RoleManager<AppRole>>();
-    await DbInitializer.SeedAsync(ctx, userMgr, roleMgr);
+
+    // Retry loop — chờ SQL Server tạo xong DB
+    var maxRetries = 10;
+    for (int i = 1; i <= maxRetries; i++)
+    {
+        try
+        {
+            logger.LogInformation("⏳ Attempt {i}/{max}: Migrating database...", i, maxRetries);
+
+            // Tạo database + chạy migration
+            await context.Database.MigrateAsync();
+
+            // Seed data
+            await DbInitializer.SeedAsync(context, userMgr, roleMgr);
+
+            logger.LogInformation("✅ Database ready!");
+            break; // Thành công → thoát loop
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning("⚠️ Attempt {i} failed: {msg}", i, ex.Message);
+
+            if (i == maxRetries)
+            {
+                logger.LogError("❌ Could not initialize database after {max} attempts.", maxRetries);
+                throw;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(5 * i)); // Tăng dần: 5s, 10s, 15s...
+        }
+    }
 }
 
 // ── Middleware Pipeline ─────────────────────────────────────
@@ -96,7 +139,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowWebPortal");
-app.UseHttpsRedirection();
+// Chỉ dùng HTTPS redirect khi KHÔNG chạy trong Docker
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseAuthentication();   // ← PHẢI trước UseAuthorization
 app.UseAuthorization();
 app.MapControllers();
