@@ -12,7 +12,7 @@ public class UserQuizAttempt
     public bool? IsPassed { get; set; }
 
     public AppUser InternUser { get; set; } = null!;
-    public QuizBank QuizBank { get; set; } = null!;
+    public Data.Entities.QuizBank QuizBank { get; set; } = null!;
     public ICollection<UserQuizAnswer> Answers { get; set; } = new List<UserQuizAnswer>();
     public Certificate? Certificate { get; set; }
 }
