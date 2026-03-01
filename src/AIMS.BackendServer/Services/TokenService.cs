@@ -30,21 +30,24 @@ public class TokenService : ITokenService
     {
         var roles = await _userManager.GetRolesAsync(user);
 
-        // ── Xây dựng claims ────────────────────────────────────────
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub,   user.Id),
+            // ⭐ QUAN TRỌNG — Identity đọc từ đây
+            new Claim(ClaimTypes.NameIdentifier, user.Id),
+
+            // Có thể giữ sub để tương thích chuẩn JWT
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+
             new Claim(JwtRegisteredClaimNames.Email, user.Email ?? ""),
-            new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-            new Claim("firstName", user.FirstName),
-            new Claim("lastName",  user.LastName),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+
+            new Claim("firstName", user.FirstName ?? ""),
+            new Claim("lastName", user.LastName ?? "")
         };
 
-        // Thêm tất cả roles vào token
         foreach (var role in roles)
             claims.Add(new Claim(ClaimTypes.Role, role));
 
-        // ── Tạo token ──────────────────────────────────────────────
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
