@@ -9,7 +9,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
+// Bổ sung các namespace bắt buộc cho OpenAPI
+using Microsoft.OpenApi;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── 1. Database ────────────────────────────────────────────
@@ -65,7 +69,40 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 // ── 7. Controllers + OpenAPI (Scalar) ──────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi();
+// Cấu hình OpenAPI với Bearer Token
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.AddDocumentTransformer((document, context, ct) =>
+    {
+        document.Info = new()
+        {
+            Title = "AIMS API",
+            Version = "v1",
+            Description = "Hệ thống Quản lý Thực tập sinh Thông minh — DEHA Việt Nam",
+        };
+
+        // Thêm Bearer Token security scheme
+        document.Components ??= new();
+
+        // Fix: Sử dụng IOpenApiSecurityScheme cho Dictionary để match với .NET 9 OpenApi target type
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Nhập JWT token. VD: eyJhbGci...",
+        };
+
+        return Task.CompletedTask;
+    });
+});
+
+// FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+
+// AutoMapper
+builder.Services.AddAutoMapper(typeof(Program).Assembly);
 
 // ── CORS (cho WebPortal gọi API) ───────────────────────────
 builder.Services.AddCors(opts => opts.AddPolicy("AllowWebPortal", policy =>
@@ -90,14 +127,21 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(opts =>
-        opts.WithTitle("AIMS API")
+    {
+        opts.WithTitle("AIMS API Reference")
             .WithTheme(ScalarTheme.Moon)
-            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient));
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+            // Fix: Sử dụng các extension method mới để tránh warning CS0618
+            .AddPreferredSecuritySchemes("Bearer");
+    });
 }
 
 app.UseCors("AllowWebPortal");
 app.UseHttpsRedirection();
 app.UseAuthentication();   // ← PHẢI trước UseAuthorization
 app.UseAuthorization();
+// ⭐ Permission Middleware — đặt SAU Authentication
+app.UseMiddleware<AIMS.BackendServer.Middleware.PermissionMiddleware>();
+
 app.MapControllers();
 app.Run();

@@ -13,6 +13,7 @@ public static class DbInitializer
     {
         await SeedRolesAsync(roleManager);
         await SeedAdminUserAsync(userManager);
+        await SeedHrUserAsync(userManager);
 
         await SeedFunctionsAsync(context);
         await context.SaveChangesAsync(); // ← Save Functions trước
@@ -75,8 +76,29 @@ public static class DbInitializer
         if (result.Succeeded)
             await userManager.AddToRoleAsync(adminUser, "Admin");
     }
-
     // ─────────────────────────────────────────────────────────────
+    // HR
+    private static async Task SeedHrUserAsync(UserManager<AppUser> userManager)
+    {
+        const string hrEmail = "hr@deha.vn";
+
+        if (await userManager.FindByEmailAsync(hrEmail) != null) return;
+
+        var adminUser = new AppUser
+        {
+            Id = "hr-seed-001",
+            UserName = hrEmail,
+            Email = hrEmail,
+            FirstName = "HR",
+            LastName = "User",
+            IsActive = true,
+            EmailConfirmed = true,
+        };
+
+        var result = await userManager.CreateAsync(adminUser, "Admin@2025!");
+        if (result.Succeeded)
+            await userManager.AddToRoleAsync(adminUser, "HR");
+    }
     // 3. FUNCTIONS (cây menu hệ thống)
     // ─────────────────────────────────────────────────────────────
     private static async Task SeedFunctionsAsync(AimsDbContext context)
