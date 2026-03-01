@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
-using AIMS.BackendServer.Data;
-using Microsoft.EntityFrameworkCore;
+using AIMS.BackendServer.Services;
 
 namespace AIMS.BackendServer.Middleware;
 
@@ -8,7 +7,6 @@ public class PermissionMiddleware
 {
     private readonly RequestDelegate _next;
 
-    // Các path không cần kiểm tra permission
     private static readonly HashSet<string> PublicPaths = new(
         StringComparer.OrdinalIgnoreCase)
     {
@@ -19,37 +17,35 @@ public class PermissionMiddleware
         "/health",
     };
 
-    public PermissionMiddleware(RequestDelegate next)
-        => _next = next;
+    public PermissionMiddleware(RequestDelegate next) => _next = next;
 
     public async Task InvokeAsync(
         HttpContext context,
-        AimsDbContext db)
+        IPermissionCacheService permissionCache)  // ← Inject cache service
     {
         var path = context.Request.Path.Value ?? "";
 
-        // ── 1. Bỏ qua các path public ──────────────────────────
+        // ── Public path → skip ────────────────────────────────
         if (IsPublicPath(path))
         {
             await _next(context);
             return;
         }
 
-        // ── 2. Bỏ qua nếu chưa đăng nhập (để [Authorize] xử lý) ─
+        // ── Chưa login → skip (để [Authorize] xử lý) ─────────
         if (!context.User.Identity?.IsAuthenticated ?? true)
         {
             await _next(context);
             return;
         }
 
-        // ── 3. Admin bypass — không kiểm tra permission ─────────
+        // ── Admin bypass ──────────────────────────────────────
         if (context.User.IsInRole("Admin"))
         {
             await _next(context);
             return;
         }
 
-        // ── 4. Lấy userId từ JWT claim ──────────────────────────
         var userId = context.User
             .FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
@@ -61,38 +57,22 @@ public class PermissionMiddleware
             return;
         }
 
-        // ── 5. Map HTTP Method → CommandId ─────────────────────
-        var commandId = context.Request.Method.ToUpper() switch
-        {
-            "GET" => "VIEW",
-            "POST" => "CREATE",
-            "PUT" => "UPDATE",
-            "PATCH" => "UPDATE",
-            "DELETE" => "DELETE",
-            _ => "VIEW",
-        };
-
-        // ── 6. Map API Path → FunctionId ───────────────────────
+        // ── Map request → FunctionId + CommandId ─────────────
+        var commandId = MapMethodToCommand(context.Request.Method);
         var functionId = MapPathToFunctionId(path);
 
-        // Không map được → cho phép qua (các API nội bộ)
         if (string.IsNullOrEmpty(functionId))
         {
             await _next(context);
             return;
         }
 
-        // ── 7. Kiểm tra Permission trong DB ────────────────────
-        var roleIds = await db.UserRoles
-            .Where(ur => ur.UserId == userId)
-            .Select(ur => ur.RoleId)
-            .ToListAsync();
+        // ── Kiểm tra từ CACHE (không query DB) ───────────────
+        var permissions = await permissionCache
+            .GetUserPermissionsAsync(userId);
 
-        var hasPermission = await db.Permissions
-            .AnyAsync(p =>
-                roleIds.Contains(p.RoleId) &&
-                p.FunctionId == functionId &&
-                p.CommandId == commandId);
+        var hasPermission = permissions.Contains(
+            new PermissionCacheKey(functionId, commandId));
 
         if (!hasPermission)
         {
@@ -109,39 +89,40 @@ public class PermissionMiddleware
         await _next(context);
     }
 
-    // ─────────────────────────────────────────────────────────
-    // Map URL path → FunctionId
-    // ─────────────────────────────────────────────────────────
+    private static string MapMethodToCommand(string method) =>
+        method.ToUpper() switch
+        {
+            "GET" => "VIEW",
+            "POST" => "CREATE",
+            "PUT" => "UPDATE",
+            "PATCH" => "UPDATE",
+            "DELETE" => "DELETE",
+            _ => "VIEW",
+        };
+
     private static string? MapPathToFunctionId(string path)
     {
         path = path.ToLower();
-
         return path switch
         {
             _ when path.Contains("/api/roles") => "SYSTEM_ROLE",
             _ when path.Contains("/api/users") => "SYSTEM_USER",
             _ when path.Contains("/api/permissions") => "SYSTEM_PERMISSION",
             _ when path.Contains("/api/functions") => "SYSTEM_PERMISSION",
-
             _ when path.Contains("/api/jobdescriptions") => "RECRUITMENT_JD",
             _ when path.Contains("/api/applications") => "RECRUITMENT_CV",
             _ when path.Contains("/api/screening") => "RECRUITMENT_CV",
-
             _ when path.Contains("/api/courses") => "LMS_COURSES",
-            _ when path.Contains("/api/lessons") => "LMS_COURSES",
             _ when path.Contains("/api/quizbanks") => "LMS_QUIZ",
-            _ when path.Contains("/api/quizattempts") => "LMS_QUIZ",
             _ when path.Contains("/api/certificates") => "LMS_CERTIFICATE",
-
             _ when path.Contains("/api/tasks") => "TASKS_BOARD",
             _ when path.Contains("/api/dailyreports") => "TASKS_REPORT",
             _ when path.Contains("/api/timesheets") => "TASKS_TIMESHEET",
-
-            _ => null  // Không map → cho phép qua
+            _ => null,
         };
     }
 
-    private static bool IsPublicPath(string path)
-        => PublicPaths.Any(p => path.StartsWith(p,
+    private static bool IsPublicPath(string path) =>
+        PublicPaths.Any(p => path.StartsWith(p,
             StringComparison.OrdinalIgnoreCase));
 }

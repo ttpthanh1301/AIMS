@@ -1,4 +1,5 @@
 using AIMS.BackendServer.Data;
+using AIMS.BackendServer.Services;
 using AIMS.BackendServer.Data.Entities;
 using AIMS.ViewModels.Systems;
 using AutoMapper;
@@ -204,7 +205,7 @@ public class UsersController : ControllerBase
     // ─────────────────────────────────────────────────────────
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Delete(string id)
+    public async Task<IActionResult> Delete(string id, [FromServices] IPermissionCacheService permissionCache)
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null)
@@ -220,6 +221,8 @@ public class UsersController : ControllerBase
         user.IsActive = false;
         user.LastModifiedDate = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
+        // ⭐ Xóa cache khi user bị deactivate
+        permissionCache.InvalidateUser(id);
 
         return Ok(new { message = $"Đã vô hiệu hóa user '{user.Email}'." });
     }
@@ -257,7 +260,9 @@ public class UsersController : ControllerBase
     [HttpPut("{id}/roles")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AssignRoles(
-        string id, [FromBody] AssignRoleRequest request)
+        string id,
+        [FromBody] AssignRoleRequest request,
+        [FromServices] IPermissionCacheService permissionCache)
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null)
@@ -277,7 +282,7 @@ public class UsersController : ControllerBase
 
         if (rolesToAssign.Any())
             await _userManager.AddToRolesAsync(user, rolesToAssign);
-
+        permissionCache.InvalidateUser(id);
         return Ok(new
         {
             message = $"Đã cập nhật roles cho '{user.Email}'.",

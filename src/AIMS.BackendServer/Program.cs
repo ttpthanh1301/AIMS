@@ -77,6 +77,8 @@ builder.Services.AddAuthorization();
 
 // ── 6. Services ────────────────────────────────────────────
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddMemoryCache();                  
+builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
 
 // ── 7. Controllers + OpenAPI (Scalar) ──────────────────────
 builder.Services.AddControllers();
