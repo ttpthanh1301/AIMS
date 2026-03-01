@@ -42,7 +42,7 @@ public class AimsDbContext : IdentityDbContext<AppUser, AppRole, string>
     public DbSet<TaskItem> TaskItems { get; set; }
     public DbSet<TaskActivity> TaskActivities { get; set; }
     public DbSet<DailyReport> DailyReports { get; set; }
-    public DbSet<Timesheet> Timesheets { get; set; }
+    public DbSet<Entities.Timesheet> Timesheets { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
