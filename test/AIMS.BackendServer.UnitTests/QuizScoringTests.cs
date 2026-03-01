@@ -1,6 +1,7 @@
 using AIMS.BackendServer.UnitTests.Helpers;
 using AIMS.BackendServer.Data.Entities;
 using FluentAssertions;
+using Xunit;
 
 namespace AIMS.BackendServer.UnitTests;
 
