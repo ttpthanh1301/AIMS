@@ -5,6 +5,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using AIMS.BackendServer.Services;
 
 namespace AIMS.BackendServer.Controllers;
 
@@ -91,7 +92,9 @@ public class PermissionsController : ControllerBase
     // (UI gửi lên danh sách permissions MỚI — replace hoàn toàn)
     // ─────────────────────────────────────────────────────────
     [HttpPut]
-    public async Task<IActionResult> Update([FromBody] UpdatePermissionRequest request)
+    public async Task<IActionResult> Update(
+    [FromBody] UpdatePermissionRequest request
+    , [FromServices] IPermissionCacheService permissionCache)
     {
         // Xóa toàn bộ permissions cũ của Role này
         var oldPermissions = _context.Permissions
@@ -115,9 +118,12 @@ public class PermissionsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // ⭐ Invalidate cache TẤT CẢ users vì thay đổi permission của role
+        // ảnh hưởng đến tất cả users có role đó
+        permissionCache.InvalidateAll();
         return Ok(new
         {
-            message = $"Đã cập nhật {request.Permissions.Count} permissions cho role '{request.RoleId}'.",
+            message = $"Đã cập nhật {request.Permissions.Count} permissions.",
         });
     }
 
