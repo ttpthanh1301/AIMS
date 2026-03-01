@@ -1,135 +1,333 @@
+using AIMS.BackendServer.Data.Entities;
 using UglyToad.PdfPig;
+using DocumentFormat.OpenXml.Packaging;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AIMS.BackendServer.Services;
-
-// ── Response Models ────────────────────────────────────────────
-public record CVParsedResult
-{
-    public string RawText { get; init; } = "";
-    public string Name { get; init; } = "";
-    public string Email { get; init; } = "";
-    public string Phone { get; init; } = "";
-    public string Skills { get; init; } = "";
-}
-
-public record ScreeningResult
-{
-    public decimal MatchingScore { get; init; }
-    public string KeywordsMatched { get; init; } = "";
-    public string KeywordsMissing { get; init; } = "";
-}
 
 // ── Interface ──────────────────────────────────────────────────
 public interface IAIScreeningService
 {
-    Task<CVParsedResult> ParseCVAsync(Stream pdfStream);
-    Task<ScreeningResult> ScreenCVAsync(string cvText, string jdText);
+    Task<CVParsedData> ParseCVAsync(string filePath, int applicationId);
+    Task<AIScreeningResult> ScreenCVAsync(int applicationId, string requiredSkills);
 }
 
 // ── Implementation ─────────────────────────────────────────────
 public class AIScreeningService : IAIScreeningService
 {
-    // 1. Đọc PDF → text
-    public Task<CVParsedResult> ParseCVAsync(Stream pdfStream)
+    // ── Stopwords tiếng Anh phổ biến ──────────────────────────
+    private static readonly HashSet<string> Stopwords = new(
+        StringComparer.OrdinalIgnoreCase)
     {
-        using var pdf = PdfDocument.Open(pdfStream);
-        var text = string.Join(" ", pdf.GetPages().Select(p => p.Text));
-
-        return Task.FromResult(new CVParsedResult
-        {
-            RawText = text,
-            Name = ExtractName(text),
-            Email = ExtractEmail(text),
-            Phone = ExtractPhone(text),
-            Skills = ExtractSkills(text),
-        });
-    }
-
-    // 2. TF-IDF + Cosine Similarity
-    public Task<ScreeningResult> ScreenCVAsync(string cvText, string jdText)
-    {
-        var cvTokens = Tokenize(cvText);
-        var jdTokens = Tokenize(jdText);
-        var vocab = cvTokens.Union(jdTokens).Distinct().ToList();
-
-        var cvVec = ComputeTfIdf(cvTokens, vocab);
-        var jdVec = ComputeTfIdf(jdTokens, vocab);
-
-        double score = CosineSimilarity(cvVec, jdVec) * 100;
-        var matched = jdTokens.Intersect(cvTokens).ToList();
-        var missing = jdTokens.Except(cvTokens).ToList();
-
-        return Task.FromResult(new ScreeningResult
-        {
-            MatchingScore = Math.Round((decimal)score, 2),
-            KeywordsMatched = string.Join(", ", matched),
-            KeywordsMissing = string.Join(", ", missing),
-        });
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────
-    private static readonly HashSet<string> Stopwords = new()
-    {
-        "the","a","an","is","in","on","at","to","of","and","or","for",
-        "with","as","by","from","that","this","are","was","be","have",
-        "it","its","will","can","should","would","could","may",
+        "a","an","the","and","or","but","in","on","at","to","for",
+        "of","with","by","from","is","are","was","were","be","been",
+        "have","has","had","do","does","did","will","would","could",
+        "should","may","might","shall","can","this","that","these",
+        "those","i","me","my","we","our","you","your","he","his",
+        "she","her","it","its","they","their","what","which","who",
+        "when","where","how","all","each","every","both","few","more",
+        "most","other","some","such","no","not","only","same","so",
+        "than","too","very","just","about","above","after","before",
     };
 
-    private List<string> Tokenize(string text) =>
-        text.ToLower()
-            .Split(new[] { ' ', '\n', '\r', ',', '.', ';', ':', '(', ')', '/', '-', '\t' },
-                   StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length > 2 && !Stopwords.Contains(w))
+    // ── Tech keywords quan trọng ───────────────────────────────
+    private static readonly HashSet<string> TechKeywords = new(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        "csharp","c#","dotnet",".net","net","aspnet","asp.net",
+        "python","java","javascript","typescript","react","angular","vue",
+        "sql","mysql","postgresql","mongodb","redis","elasticsearch",
+        "docker","kubernetes","azure","aws","gcp","git","github","gitlab",
+        "html","css","bootstrap","jquery","nodejs","express",
+        "jwt","oauth","rest","api","microservices","mvc",
+        "entity","framework","linq","ef","efcore",
+        "machine","learning","ml","ai","nlp","tensorflow","pytorch",
+        "agile","scrum","devops","cicd","jenkins","linux","ubuntu",
+        "oop","solid","design","patterns","clean","architecture",
+    };
+
+    // ─────────────────────────────────────────────────────────
+    // ParseCVAsync — Bóc tách văn bản từ CV (PDF/DOCX)
+    // ─────────────────────────────────────────────────────────
+    public async Task<CVParsedData> ParseCVAsync(
+        string filePath, int applicationId)
+    {
+        var rawText = await ExtractTextAsync(filePath);
+
+        var parsed = new CVParsedData
+        {
+            ApplicationId = applicationId,
+            RawText = rawText,
+            FullName = ExtractName(rawText),
+            EmailExtracted = ExtractEmail(rawText),
+            PhoneExtracted = ExtractPhone(rawText),
+            SkillsExtracted = ExtractSkills(rawText),
+            EducationExtracted = ExtractSection(rawText,
+                new[] { "education", "academic", "university", "degree" }),
+            ExperienceExtracted = ExtractSection(rawText,
+                new[] { "experience", "work", "project", "internship" }),
+            ParsedAt = DateTime.UtcNow,
+        };
+
+        return parsed;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // ScreenCVAsync — TF-IDF + Cosine Similarity
+    // ─────────────────────────────────────────────────────────
+    public async Task<AIScreeningResult> ScreenCVAsync(
+        int applicationId,
+        string requiredSkills)
+    {
+        await Task.CompletedTask; // Để async signature nhất quán
+
+        // Lấy CV text từ CVParsedData (truyền vào qua overload khác)
+        // → Xem ScreeningController gọi service này
+
+        throw new NotImplementedException(
+            "Gọi ScreenCVAsync(cvText, requiredSkills, applicationId)");
+    }
+
+    // ── Overload thực tế được dùng ─────────────────────────────
+    public Task<AIScreeningResult> ScreenCVAsync(
+        string cvText,
+        string requiredSkills,
+        int applicationId)
+    {
+        // ── Bước 1: Tokenize + Normalize ──────────────────────
+        var cvTokens = Tokenize(cvText);
+        var jdTokens = Tokenize(requiredSkills);
+
+        // ── Bước 2: Lấy vocabulary chung ─────────────────────
+        var vocabulary = cvTokens.Union(jdTokens).Distinct().ToList();
+
+        // ── Bước 3: Tính TF-IDF vectors ──────────────────────
+        var cvVector = ComputeTfIdf(cvTokens, vocabulary,
+            new[] { cvTokens, jdTokens });
+        var jdVector = ComputeTfIdf(jdTokens, vocabulary,
+            new[] { cvTokens, jdTokens });
+
+        // ── Bước 4: Cosine Similarity ─────────────────────────
+        var score = CosineSimilarity(cvVector, jdVector);
+        var matchingScore = Math.Round(score * 100, 2); // Đổi sang %
+
+        // ── Bước 5: Phân tích keywords ────────────────────────
+        var jdKeywords = jdTokens
+            .Where(t => TechKeywords.Contains(t))
+            .Distinct()
             .ToList();
 
-    private double[] ComputeTfIdf(List<string> tokens, List<string> vocab)
-    {
-        int total = tokens.Count == 0 ? 1 : tokens.Count;
-        return vocab.Select(term =>
+        var cvKeywords = cvTokens
+            .Where(t => TechKeywords.Contains(t))
+            .Distinct()
+            .ToList();
+
+        var matched = jdKeywords
+            .Intersect(cvKeywords, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var missing = jdKeywords
+            .Except(cvKeywords, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var result = new AIScreeningResult
         {
-            double tf = tokens.Count(t => t == term) / (double)total;
-            double df = tokens.Contains(term) ? 1 : 0;
-            double idf = df > 0 ? Math.Log(2.0 / df) : 0;
-            return tf * idf;
-        }).ToArray();
+            ApplicationId = applicationId,
+            MatchingScore = (decimal)matchingScore,
+            KeywordsMatched = string.Join(", ", matched),
+            KeywordsMissing = string.Join(", ", missing),
+            ScreenedAt = DateTime.UtcNow,
+        };
+
+        return Task.FromResult(result);
     }
 
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Đọc text từ PDF hoặc DOCX
+    // ─────────────────────────────────────────────────────────
+    private static async Task<string> ExtractTextAsync(string filePath)
+    {
+        await Task.CompletedTask;
+
+        var ext = Path.GetExtension(filePath).ToLower();
+        var sb = new StringBuilder();
+
+        if (ext == ".pdf")
+        {
+            // Dùng PdfPig đọc PDF
+            using var pdf = PdfDocument.Open(filePath);
+            foreach (var page in pdf.GetPages())
+                sb.AppendLine(page.Text);
+        }
+        else if (ext == ".docx")
+        {
+            // Dùng DocumentFormat.OpenXml đọc DOCX
+            using var doc = WordprocessingDocument.Open(filePath, false);
+            var body = doc.MainDocumentPart?.Document?.Body;
+            if (body != null)
+                sb.Append(body.InnerText);
+        }
+        else if (ext == ".doc")
+        {
+            // .doc cũ — đọc raw bytes tìm text
+            var bytes = await File.ReadAllBytesAsync(filePath);
+            var text = Encoding.UTF8.GetString(bytes)
+                .Replace("\0", " ")
+                .Replace("\r\n", " ");
+            sb.Append(text);
+        }
+
+        return sb.ToString();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Tokenize — lowercase, remove stopwords, stem
+    // ─────────────────────────────────────────────────────────
+    private static List<string> Tokenize(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return new List<string>();
+
+        // Normalize: lowercase, giữ chữ cái và số
+        var normalized = text.ToLower();
+
+        // Tách tokens bằng regex
+        var tokens = Regex.Split(normalized, @"[^a-z0-9#\.\+]+")
+            .Where(t => t.Length > 1)               // Bỏ ký tự đơn
+            .Where(t => !Stopwords.Contains(t))     // Bỏ stopwords
+            .ToList();
+
+        return tokens;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Tính TF-IDF vector
+    // TF = tần suất từ / tổng số từ trong doc
+    // IDF = log(N / df) — N = số docs, df = số docs chứa từ
+    // ─────────────────────────────────────────────────────────
+    private static double[] ComputeTfIdf(
+        List<string> tokens,
+        List<string> vocabulary,
+        List<string>[] allDocTokens)
+    {
+        int N = allDocTokens.Length;
+        double total = tokens.Count;
+        var vector = new double[vocabulary.Count];
+
+        for (int i = 0; i < vocabulary.Count; i++)
+        {
+            var term = vocabulary[i];
+
+            // TF
+            var tf = tokens.Count(t => t == term) / (total + 1e-10);
+
+            // DF = số documents chứa term
+            var df = allDocTokens.Count(doc => doc.Contains(term));
+
+            // IDF = log(N / (df + 1)) — smoothing tránh chia 0
+            var idf = Math.Log((double)N / (df + 1) + 1);
+
+            vector[i] = tf * idf;
+        }
+
+        return vector;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Cosine Similarity = (A·B) / (|A| × |B|)
+    // ─────────────────────────────────────────────────────────
     private static double CosineSimilarity(double[] a, double[] b)
     {
-        double dot = a.Zip(b, (x, y) => x * y).Sum();
-        double normA = Math.Sqrt(a.Sum(x => x * x));
-        double normB = Math.Sqrt(b.Sum(x => x * x));
-        return normA == 0 || normB == 0 ? 0 : dot / (normA * normB);
+        double dot = 0, normA = 0, normB = 0;
+
+        for (int i = 0; i < a.Length; i++)
+        {
+            dot += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+        }
+
+        var denominator = Math.Sqrt(normA) * Math.Sqrt(normB);
+        return denominator < 1e-10 ? 0 : dot / denominator;
     }
 
-    private static string ExtractEmail(string text)
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Trích xuất Email bằng Regex
+    // ─────────────────────────────────────────────────────────
+    private static string? ExtractEmail(string text)
     {
-        var m = System.Text.RegularExpressions.Regex
-            .Match(text, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
-        return m.Success ? m.Value : "";
+        var match = Regex.Match(text,
+            @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
+        return match.Success ? match.Value : null;
     }
 
-    private static string ExtractPhone(string text)
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Trích xuất Phone bằng Regex
+    // ─────────────────────────────────────────────────────────
+    private static string? ExtractPhone(string text)
     {
-        var m = System.Text.RegularExpressions.Regex
-            .Match(text, @"(\+84|0)[0-9]{9,10}");
-        return m.Success ? m.Value : "";
+        var match = Regex.Match(text,
+            @"(\+84|0)[0-9]{9,10}");
+        return match.Success ? match.Value : null;
     }
 
-    private static string ExtractName(string text) =>
-        text.Split('\n').FirstOrDefault(l => l.Trim().Length > 2)?.Trim() ?? "";
-
-    private static readonly string[] TechKeywords =
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Trích xuất tên (dòng đầu tiên thường là tên)
+    // ─────────────────────────────────────────────────────────
+    private static string? ExtractName(string text)
     {
-        "c#","dotnet",".net","python","java","javascript","typescript",
-        "react","angular","vue","sql","azure","docker","git","api",
-        "html","css","ef core","linq","rest","microservice","spring",
-        "nodejs","mongodb","postgresql","redis","kubernetes","ci/cd",
-    };
+        var lines = text.Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 2 && l.Length < 50)
+            .Take(5)
+            .ToList();
 
+        // Tên thường là dòng đầu không chứa số hoặc email
+        return lines.FirstOrDefault(l =>
+            !Regex.IsMatch(l, @"[\d@]") &&
+            Regex.IsMatch(l, @"^[A-Za-zÀ-ỹ\s]+$"));
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Trích xuất tech skills từ CV
+    // ─────────────────────────────────────────────────────────
     private static string ExtractSkills(string text)
     {
-        var found = TechKeywords.Where(k => text.ToLower().Contains(k));
-        return string.Join(", ", found);
+        var tokens = Tokenize(text);
+        var skills = tokens
+            .Where(t => TechKeywords.Contains(t))
+            .Distinct()
+            .ToList();
+
+        return string.Join(", ", skills);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // HELPER: Trích xuất section theo keywords tiêu đề
+    // ─────────────────────────────────────────────────────────
+    private static string? ExtractSection(
+        string text,
+        string[] sectionKeywords)
+    {
+        var lines = text.Split('\n').ToList();
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i].ToLower().Trim();
+            if (sectionKeywords.Any(k => line.Contains(k)))
+            {
+                // Lấy 10 dòng tiếp theo
+                var section = lines
+                    .Skip(i + 1)
+                    .Take(10)
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToList();
+
+                return string.Join(" | ", section);
+            }
+        }
+
+        return null;
     }
 }

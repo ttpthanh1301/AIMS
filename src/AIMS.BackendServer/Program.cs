@@ -77,8 +77,11 @@ builder.Services.AddAuthorization();
 
 // ── 6. Services ────────────────────────────────────────────
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddMemoryCache();                  
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
+builder.Services.AddScoped<IAIScreeningService, AIScreeningService>();
+// Cấu hình static files để serve CV uploads
+builder.Services.AddDirectoryBrowser();
 
 // ── 7. Controllers + OpenAPI (Scalar) ──────────────────────
 builder.Services.AddControllers();
@@ -180,6 +183,7 @@ if (app.Environment.IsDevelopment())
             .AddPreferredSecuritySchemes("Bearer");
     });
 }
+app.UseStaticFiles();
 
 app.UseCors("AllowWebPortal");
 // Chỉ dùng HTTPS redirect khi KHÔNG chạy trong Docker
