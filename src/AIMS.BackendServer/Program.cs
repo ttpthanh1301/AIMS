@@ -69,6 +69,10 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(
                                            Encoding.UTF8.GetBytes(jwtSettings.Key)),
             ClockSkew = TimeSpan.Zero, // Hết hạn chính xác
+
+            // ⭐ THÊM 2 DÒNG NÀY
+            NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
         };
     });
 

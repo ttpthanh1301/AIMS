@@ -4,6 +4,7 @@ using AIMS.ViewModels.Recruitment;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using AIMS.BackendServer.Extensions;
 
 namespace AIMS.BackendServer.Controllers;
 
