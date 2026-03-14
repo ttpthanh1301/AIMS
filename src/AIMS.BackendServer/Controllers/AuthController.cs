@@ -4,6 +4,7 @@ using AIMS.BackendServer.Settings;
 using AIMS.ViewModels.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using AIMS.BackendServer.Extensions;
 
 namespace AIMS.BackendServer.Controllers;
 
@@ -89,7 +90,7 @@ public class AuthController : ControllerBase
     [Microsoft.AspNetCore.Authorization.Authorize]
     public async Task<IActionResult> GetMe()
     {
-        var userId = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        var userId = User.GetUserId();
         var user = await _userManager.FindByIdAsync(userId ?? "");
         if (user == null) return NotFound();
 
