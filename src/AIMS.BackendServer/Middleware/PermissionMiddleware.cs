@@ -1,5 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
 using AIMS.BackendServer.Services;
+using System.Security.Claims;
 
 namespace AIMS.BackendServer.Middleware;
 
@@ -21,7 +21,7 @@ public class PermissionMiddleware
 
     public async Task InvokeAsync(
         HttpContext context,
-        IPermissionCacheService permissionCache)  // ← Inject cache service
+        IPermissionCacheService permissionCache)
     {
         var path = context.Request.Path.Value ?? "";
 
@@ -46,14 +46,17 @@ public class PermissionMiddleware
             return;
         }
 
-        var userId = context.User
-            .FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        // ── Lấy userId — thử tất cả claim types ──────────────
+        var userId =
+            context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value
+            ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? context.User.FindFirst("sub")?.Value
+            ?? "";
 
+        // Không lấy được userId → cho đi tiếp, [Authorize] sẽ xử lý
         if (string.IsNullOrEmpty(userId))
         {
-            context.Response.StatusCode = 401;
-            await context.Response.WriteAsJsonAsync(
-                new { message = "Không xác định được người dùng." });
+            await _next(context);
             return;
         }
 
@@ -61,13 +64,14 @@ public class PermissionMiddleware
         var commandId = MapMethodToCommand(context.Request.Method);
         var functionId = MapPathToFunctionId(path);
 
+        // Không map được → cho đi tiếp
         if (string.IsNullOrEmpty(functionId))
         {
             await _next(context);
             return;
         }
 
-        // ── Kiểm tra từ CACHE (không query DB) ───────────────
+        // ── Kiểm tra từ CACHE ─────────────────────────────────
         var permissions = await permissionCache
             .GetUserPermissionsAsync(userId);
 
@@ -105,19 +109,34 @@ public class PermissionMiddleware
         path = path.ToLower();
         return path switch
         {
+            // ── Hệ thống (Admin only) ─────────────────────────
             _ when path.Contains("/api/roles") => "SYSTEM_ROLE",
             _ when path.Contains("/api/users") => "SYSTEM_USER",
             _ when path.Contains("/api/permissions") => "SYSTEM_PERMISSION",
             _ when path.Contains("/api/functions") => "SYSTEM_PERMISSION",
+
+            // ── Tuyển dụng (HR) ───────────────────────────────
             _ when path.Contains("/api/jobdescriptions") => "RECRUITMENT_JD",
             _ when path.Contains("/api/applications") => "RECRUITMENT_CV",
             _ when path.Contains("/api/screening") => "RECRUITMENT_CV",
+
+            // ── LMS — chỉ check CRUD course/quiz (Mentor) ─────
             _ when path.Contains("/api/courses") => "LMS_COURSES",
+            _ when path.Contains("/api/lessons") => "LMS_COURSES",
             _ when path.Contains("/api/quizbanks") => "LMS_QUIZ",
-            _ when path.Contains("/api/certificates") => "LMS_CERTIFICATE",
+
+            // ── Task Management ───────────────────────────────
             _ when path.Contains("/api/tasks") => "TASKS_BOARD",
             _ when path.Contains("/api/dailyreports") => "TASKS_REPORT",
             _ when path.Contains("/api/timesheets") => "TASKS_TIMESHEET",
+
+            // ── Intern actions — đã có [Authorize(Roles)] bảo vệ
+            // → return null để middleware KHÔNG check permission
+            _ when path.Contains("/api/enrollments") => null,
+            _ when path.Contains("/api/lessonprogress") => null,
+            _ when path.Contains("/api/quizattempts") => null,
+            _ when path.Contains("/api/certificates") => null,
+
             _ => null,
         };
     }
