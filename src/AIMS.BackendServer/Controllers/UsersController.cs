@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using AIMS.BackendServer.Extensions;
 
 namespace AIMS.BackendServer.Controllers;
 

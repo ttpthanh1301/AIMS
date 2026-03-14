@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AIMS.ViewModels.Recruitment;
 namespace AIMS.BackendServer.Controllers;
+using AIMS.BackendServer.Extensions;
 
 [Route("api/[controller]")]
 [ApiController]

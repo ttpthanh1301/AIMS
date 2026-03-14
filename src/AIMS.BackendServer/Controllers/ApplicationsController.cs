@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
+using AIMS.BackendServer.Extensions;
 
 namespace AIMS.BackendServer.Controllers;
 
@@ -154,8 +155,7 @@ public class ApplicationsController : ControllerBase
             return BadRequest(new { message = "JD không tồn tại hoặc đã đóng." });
 
         // ── Lấy userId từ JWT ─────────────────────────────────
-        var userId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-            ?? User.FindFirst("sub")?.Value ?? "";
+        var userId = User.GetUserId();
 
         // ── Kiểm tra đã nộp chưa ─────────────────────────────
         var alreadyApplied = await _context.Applications

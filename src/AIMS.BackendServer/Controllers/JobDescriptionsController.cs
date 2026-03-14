@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using AIMS.BackendServer.Extensions;
 
 namespace AIMS.BackendServer.Controllers;
 
@@ -113,8 +114,7 @@ public class JobDescriptionsController : ControllerBase
         if (!positionExists)
             return BadRequest(new { message = "JobPosition không tồn tại hoặc đã bị đóng." });
 
-        var userId = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
-                     ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = User.GetUserId();
 
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
