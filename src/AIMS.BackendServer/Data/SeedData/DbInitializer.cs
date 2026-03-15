@@ -11,37 +11,62 @@ public static class DbInitializer
         UserManager<AppUser> userManager,
         RoleManager<AppRole> roleManager)
     {
+        // Users/Roles chỉ seed 1 lần — có guard là đúng
         await SeedRolesAsync(roleManager);
-        await SeedUsersAsync(userManager);       // ← Gộp tất cả users vào 1 method
+        await SeedUsersAsync(userManager);
+
+        // ⭐ Permission data — LUÔN reset và seed lại
+        await ResetAndSeedPermissionDataAsync(context, roleManager);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // RESET + SEED — Xóa sạch rồi seed lại
+    // ─────────────────────────────────────────────────────────
+    private static async Task ResetAndSeedPermissionDataAsync(
+        AimsDbContext context,
+        RoleManager<AppRole> roleManager)
+    {
+        // Xóa theo đúng thứ tự FK
+        context.Permissions.RemoveRange(context.Permissions);
+        context.CommandInFunctions.RemoveRange(context.CommandInFunctions);
+        context.Commands.RemoveRange(context.Commands);
+        context.Functions.RemoveRange(context.Functions);
+        await context.SaveChangesAsync();
+
+        Console.WriteLine("🗑️  Đã xóa data cũ");
 
         await SeedFunctionsAsync(context);
         await context.SaveChangesAsync();
+        Console.WriteLine("✅ Functions seeded");
 
         await SeedCommandsAsync(context);
         await context.SaveChangesAsync();
+        Console.WriteLine("✅ Commands seeded");
 
         await SeedCommandInFunctionsAsync(context);
         await context.SaveChangesAsync();
+        Console.WriteLine("✅ CommandInFunctions seeded");
 
         await SeedPermissionsAsync(context, roleManager);
         await context.SaveChangesAsync();
+        Console.WriteLine("✅ Permissions seeded");
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. ROLES
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────
+    // 1. ROLES — giữ guard (không tạo lại role đã có)
+    // ─────────────────────────────────────────────────────────
     private static async Task SeedRolesAsync(RoleManager<AppRole> roleManager)
     {
         var roles = new List<AppRole>
         {
-            new AppRole { Id = "admin",  Name = "Admin",  NormalizedName = "ADMIN",
-                          Description = "Quản trị viên hệ thống, toàn quyền" },
-            new AppRole { Id = "hr",     Name = "HR",     NormalizedName = "HR",
-                          Description = "Nhân viên tuyển dụng, quản lý ứng viên" },
-            new AppRole { Id = "mentor", Name = "Mentor", NormalizedName = "MENTOR",
-                          Description = "Người hướng dẫn thực tập sinh" },
-            new AppRole { Id = "intern", Name = "Intern", NormalizedName = "INTERN",
-                          Description = "Thực tập sinh" },
+            new() { Id = "admin",  Name = "Admin",  NormalizedName = "ADMIN",
+                    Description = "Quản trị viên hệ thống, toàn quyền" },
+            new() { Id = "hr",     Name = "HR",     NormalizedName = "HR",
+                    Description = "Nhân viên tuyển dụng" },
+            new() { Id = "mentor", Name = "Mentor", NormalizedName = "MENTOR",
+                    Description = "Người hướng dẫn thực tập sinh" },
+            new() { Id = "intern", Name = "Intern", NormalizedName = "INTERN",
+                    Description = "Thực tập sinh" },
         };
 
         foreach (var role in roles)
@@ -51,180 +76,162 @@ public static class DbInitializer
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. ALL USERS — Admin, HR, Mentor, Intern
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────
+    // 2. USERS — giữ guard (không tạo lại user đã có)
+    // ─────────────────────────────────────────────────────────
     private static async Task SeedUsersAsync(UserManager<AppUser> userManager)
     {
-        // ── Admin ─────────────────────────────────────────────
-        if (await userManager.FindByEmailAsync("admin@deha.vn") == null)
+        var users = new[]
         {
-            var admin = new AppUser
-            {
-                Id = "admin-seed-001",
-                UserName = "admin@deha.vn",
-                Email = "admin@deha.vn",
-                FirstName = "System",
-                LastName = "Admin",
-                IsActive = true,
-                EmailConfirmed = true,
-            };
-            var result = await userManager.CreateAsync(admin, "Admin@2025!");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(admin, "Admin");
-        }
+            (Email: "admin@deha.vn",  Pass: "Admin@2025!",  Role: "Admin",
+             Id: "admin-seed-001",  First: "System",  Last: "Admin",
+             StudentId: (string?)null, GPA: (decimal?)null),
 
-        // ── HR ────────────────────────────────────────────────
-        if (await userManager.FindByEmailAsync("hr@deha.vn") == null)
-        {
-            var hr = new AppUser
-            {
-                Id = "hr-seed-001",
-                UserName = "hr@deha.vn",
-                Email = "hr@deha.vn",
-                FirstName = "Le",
-                LastName = "Thi HR",
-                IsActive = true,
-                EmailConfirmed = true,
-            };
-            var result = await userManager.CreateAsync(hr, "Hr@2025!");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(hr, "HR");
-        }
+            (Email: "hr@deha.vn",     Pass: "Hr@2025!",     Role: "HR",
+             Id: "hr-seed-001",     First: "Le",      Last: "Thi HR",
+             StudentId: (string?)null, GPA: (decimal?)null),
 
-        // ── Mentor ────────────────────────────────────────────
-        if (await userManager.FindByEmailAsync("mentor@deha.vn") == null)
-        {
-            var mentor = new AppUser
-            {
-                Id = "mentor-seed-001",
-                UserName = "mentor@deha.vn",
-                Email = "mentor@deha.vn",
-                FirstName = "Nguyen",
-                LastName = "Van Mentor",
-                IsActive = true,
-                EmailConfirmed = true,
-            };
-            var result = await userManager.CreateAsync(mentor, "Mentor@2025!");
-            if (result.Succeeded)
-                await userManager.AddToRoleAsync(mentor, "Mentor");
-        }
+            (Email: "mentor@deha.vn", Pass: "Mentor@2025!", Role: "Mentor",
+             Id: "mentor-seed-001", First: "Nguyen",  Last: "Van Mentor",
+             StudentId: (string?)null, GPA: (decimal?)null),
 
-        // ── Intern ────────────────────────────────────────────
-        if (await userManager.FindByEmailAsync("intern@deha.vn") == null)
+            (Email: "intern@deha.vn", Pass: "Intern@2025!", Role: "Intern",
+             Id: "intern-seed-001", First: "Tran",    Last: "Van Intern",
+             StudentId: (string?)"SV001", GPA: (decimal?)3.5m),
+        };
+
+        foreach (var u in users)
         {
-            var intern = new AppUser
+            if (await userManager.FindByEmailAsync(u.Email) != null) continue;
+
+            var user = new AppUser
             {
-                Id = "intern-seed-001",
-                UserName = "intern@deha.vn",
-                Email = "intern@deha.vn",
-                FirstName = "Tran",
-                LastName = "Van Intern",
+                Id = u.Id,
+                UserName = u.Email,
+                Email = u.Email,
+                FirstName = u.First,
+                LastName = u.Last,
                 IsActive = true,
                 EmailConfirmed = true,
-                StudentId = "SV001",
-                GPA = 3.5m,
+                StudentId = u.StudentId,
+                GPA = u.GPA,
             };
-            var result = await userManager.CreateAsync(intern, "Intern@2025!");
+
+            var result = await userManager.CreateAsync(user, u.Pass);
             if (result.Succeeded)
-                await userManager.AddToRoleAsync(intern, "Intern");
+                await userManager.AddToRoleAsync(user, u.Role);
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 3. FUNCTIONS
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────
+    // 3. FUNCTIONS — KHÔNG có guard
+    // ─────────────────────────────────────────────────────────
     private static async Task SeedFunctionsAsync(AimsDbContext context)
     {
-        if (await context.Functions.AnyAsync()) return;
-
+        // ⭐ KHÔNG có if (AnyAsync()) return
         var functions = new List<Function>
         {
-            new Function { Id = "DASHBOARD",   Name = "Dashboard",    Url = "/dashboard",
-                           Icon = "bi bi-speedometer2", SortOrder = 1, ParentId = null },
-            new Function { Id = "RECRUITMENT", Name = "Tuyển dụng",   Url = "/recruitment",
-                           Icon = "bi bi-person-plus",  SortOrder = 2, ParentId = null },
-            new Function { Id = "LMS",         Name = "Đào tạo",      Url = "/lms",
-                           Icon = "bi bi-book",         SortOrder = 3, ParentId = null },
-            new Function { Id = "TASKS",       Name = "Quản lý Task", Url = "/tasks",
-                           Icon = "bi bi-kanban",       SortOrder = 4, ParentId = null },
-            new Function { Id = "REPORTS",     Name = "Báo cáo",      Url = "/reports",
-                           Icon = "bi bi-bar-chart",    SortOrder = 5, ParentId = null },
-            new Function { Id = "SYSTEM",      Name = "Hệ thống",     Url = "/system",
-                           Icon = "bi bi-gear",         SortOrder = 6, ParentId = null },
+            new() { Id = "DASHBOARD",   Name = "Dashboard",
+                    Url = "/dashboard", Icon = "bi bi-speedometer2",
+                    SortOrder = 1, ParentId = null },
+            new() { Id = "RECRUITMENT", Name = "Tuyển dụng",
+                    Url = "/recruitment", Icon = "bi bi-person-plus",
+                    SortOrder = 2, ParentId = null },
+            new() { Id = "LMS",         Name = "Đào tạo",
+                    Url = "/lms", Icon = "bi bi-book",
+                    SortOrder = 3, ParentId = null },
+            new() { Id = "TASKS",       Name = "Quản lý Task",
+                    Url = "/tasks", Icon = "bi bi-kanban",
+                    SortOrder = 4, ParentId = null },
+            new() { Id = "REPORTS",     Name = "Báo cáo",
+                    Url = "/reports", Icon = "bi bi-bar-chart",
+                    SortOrder = 5, ParentId = null },
+            new() { Id = "SYSTEM",      Name = "Hệ thống",
+                    Url = "/system", Icon = "bi bi-gear",
+                    SortOrder = 6, ParentId = null },
 
-            new Function { Id = "RECRUITMENT_JD",
-                           Name = "Job Descriptions",   Url = "/recruitment/jd",
-                           Icon = "bi bi-file-text",    SortOrder = 1, ParentId = "RECRUITMENT" },
-            new Function { Id = "RECRUITMENT_CV",
-                           Name = "CV Screening (AI)",  Url = "/recruitment/screening",
-                           Icon = "bi bi-robot",        SortOrder = 2, ParentId = "RECRUITMENT" },
-            new Function { Id = "RECRUITMENT_RANKING",
-                           Name = "Ranking ứng viên",   Url = "/recruitment/ranking",
-                           Icon = "bi bi-trophy",       SortOrder = 3, ParentId = "RECRUITMENT" },
+            new() { Id = "RECRUITMENT_JD",
+                    Name = "Job Descriptions",  Url = "/recruitment/jd",
+                    Icon = "bi bi-file-text",   SortOrder = 1,
+                    ParentId = "RECRUITMENT" },
+            new() { Id = "RECRUITMENT_CV",
+                    Name = "CV Screening (AI)", Url = "/recruitment/screening",
+                    Icon = "bi bi-robot",       SortOrder = 2,
+                    ParentId = "RECRUITMENT" },
+            new() { Id = "RECRUITMENT_RANKING",
+                    Name = "Ranking ứng viên",  Url = "/recruitment/ranking",
+                    Icon = "bi bi-trophy",      SortOrder = 3,
+                    ParentId = "RECRUITMENT" },
 
-            new Function { Id = "LMS_COURSES",
-                           Name = "Khóa học",           Url = "/lms/courses",
-                           Icon = "bi bi-collection",   SortOrder = 1, ParentId = "LMS" },
-            new Function { Id = "LMS_QUIZ",
-                           Name = "Bài kiểm tra",       Url = "/lms/quiz",
-                           Icon = "bi bi-pencil-square",SortOrder = 2, ParentId = "LMS" },
-            new Function { Id = "LMS_CERTIFICATE",
-                           Name = "Chứng chỉ",          Url = "/lms/certificates",
-                           Icon = "bi bi-award",        SortOrder = 3, ParentId = "LMS" },
+            new() { Id = "LMS_COURSES",
+                    Name = "Khóa học",          Url = "/lms/courses",
+                    Icon = "bi bi-collection",  SortOrder = 1,
+                    ParentId = "LMS" },
+            new() { Id = "LMS_QUIZ",
+                    Name = "Bài kiểm tra",      Url = "/lms/quiz",
+                    Icon = "bi bi-pencil-square",SortOrder = 2,
+                    ParentId = "LMS" },
+            new() { Id = "LMS_CERTIFICATE",
+                    Name = "Chứng chỉ",         Url = "/lms/certificates",
+                    Icon = "bi bi-award",       SortOrder = 3,
+                    ParentId = "LMS" },
 
-            new Function { Id = "TASKS_BOARD",
-                           Name = "Kanban Board",       Url = "/tasks/board",
-                           Icon = "bi bi-columns-gap",  SortOrder = 1, ParentId = "TASKS" },
-            new Function { Id = "TASKS_REPORT",
-                           Name = "Daily Report",       Url = "/tasks/daily-report",
-                           Icon = "bi bi-journal-text", SortOrder = 2, ParentId = "TASKS" },
-            new Function { Id = "TASKS_TIMESHEET",
-                           Name = "Timesheet",          Url = "/tasks/timesheet",
-                           Icon = "bi bi-clock",        SortOrder = 3, ParentId = "TASKS" },
+            new() { Id = "TASKS_BOARD",
+                    Name = "Kanban Board",      Url = "/tasks/board",
+                    Icon = "bi bi-columns-gap", SortOrder = 1,
+                    ParentId = "TASKS" },
+            new() { Id = "TASKS_REPORT",
+                    Name = "Daily Report",      Url = "/tasks/daily-report",
+                    Icon = "bi bi-journal-text",SortOrder = 2,
+                    ParentId = "TASKS" },
+            new() { Id = "TASKS_TIMESHEET",
+                    Name = "Timesheet",         Url = "/tasks/timesheet",
+                    Icon = "bi bi-clock",       SortOrder = 3,
+                    ParentId = "TASKS" },
 
-            new Function { Id = "SYSTEM_USER",
-                           Name = "Quản lý User",       Url = "/system/users",
-                           Icon = "bi bi-people",       SortOrder = 1, ParentId = "SYSTEM" },
-            new Function { Id = "SYSTEM_ROLE",
-                           Name = "Quản lý Role",       Url = "/system/roles",
-                           Icon = "bi bi-shield",       SortOrder = 2, ParentId = "SYSTEM" },
-            new Function { Id = "SYSTEM_PERMISSION",
-                           Name = "Phân quyền",         Url = "/system/permissions",
-                           Icon = "bi bi-key",          SortOrder = 3, ParentId = "SYSTEM" },
+            new() { Id = "SYSTEM_USER",
+                    Name = "Quản lý User",      Url = "/system/users",
+                    Icon = "bi bi-people",      SortOrder = 1,
+                    ParentId = "SYSTEM" },
+            new() { Id = "SYSTEM_ROLE",
+                    Name = "Quản lý Role",      Url = "/system/roles",
+                    Icon = "bi bi-shield",      SortOrder = 2,
+                    ParentId = "SYSTEM" },
+            new() { Id = "SYSTEM_PERMISSION",
+                    Name = "Phân quyền",        Url = "/system/permissions",
+                    Icon = "bi bi-key",         SortOrder = 3,
+                    ParentId = "SYSTEM" },
         };
 
         await context.Functions.AddRangeAsync(functions);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 4. COMMANDS
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────
+    // 4. COMMANDS — KHÔNG có guard
+    // ─────────────────────────────────────────────────────────
     private static async Task SeedCommandsAsync(AimsDbContext context)
     {
-        if (await context.Commands.AnyAsync()) return;
-
+        // ⭐ KHÔNG có if (AnyAsync()) return
         var commands = new List<Command>
         {
-            new Command { Id = "VIEW",   Name = "Xem" },
-            new Command { Id = "CREATE", Name = "Tạo mới" },
-            new Command { Id = "UPDATE", Name = "Cập nhật" },
-            new Command { Id = "DELETE", Name = "Xóa" },
-            new Command { Id = "EXPORT", Name = "Xuất dữ liệu" },
-            new Command { Id = "IMPORT", Name = "Nhập dữ liệu" },
-            new Command { Id = "APPROVE",Name = "Duyệt / Phê duyệt" },
+            new() { Id = "VIEW",    Name = "Xem" },
+            new() { Id = "CREATE",  Name = "Tạo mới" },
+            new() { Id = "UPDATE",  Name = "Cập nhật" },
+            new() { Id = "DELETE",  Name = "Xóa" },
+            new() { Id = "EXPORT",  Name = "Xuất dữ liệu" },
+            new() { Id = "IMPORT",  Name = "Nhập dữ liệu" },
+            new() { Id = "APPROVE", Name = "Duyệt / Phê duyệt" },
         };
 
         await context.Commands.AddRangeAsync(commands);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 5. COMMAND IN FUNCTIONS
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────
+    // 5. COMMAND IN FUNCTIONS — KHÔNG có guard
+    // ─────────────────────────────────────────────────────────
     private static async Task SeedCommandInFunctionsAsync(AimsDbContext context)
     {
-        if (await context.CommandInFunctions.AnyAsync()) return;
-
+        // ⭐ KHÔNG có if (AnyAsync()) return
         var allFuncIds = new[]
         {
             "DASHBOARD", "RECRUITMENT", "LMS", "TASKS", "REPORTS", "SYSTEM",
@@ -261,18 +268,17 @@ public static class DbInitializer
         await context.CommandInFunctions.AddRangeAsync(cifs);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 6. PERMISSIONS — Admin + HR + Mentor + Intern
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────
+    // 6. PERMISSIONS — KHÔNG có guard
+    // ─────────────────────────────────────────────────────────
     private static async Task SeedPermissionsAsync(
         AimsDbContext context,
         RoleManager<AppRole> roleManager)
     {
-        if (await context.Permissions.AnyAsync()) return;
-
+        // ⭐ KHÔNG có if (AnyAsync()) return
         var permissions = new List<Permission>();
 
-        // ── ADMIN — toàn quyền ────────────────────────────────
+        // Admin — toàn quyền
         var adminRole = await roleManager.FindByNameAsync("Admin");
         if (adminRole != null)
         {
@@ -285,22 +291,22 @@ public static class DbInitializer
             }));
         }
 
-        // ── HR — tuyển dụng ───────────────────────────────────
+        // HR
         var hrRole = await roleManager.FindByNameAsync("HR");
         if (hrRole != null)
         {
             var hrPerms = new[]
             {
-                ("DASHBOARD",            "VIEW"),
-                ("RECRUITMENT",          "VIEW"),
-                ("RECRUITMENT_JD",       "VIEW"),
-                ("RECRUITMENT_JD",       "CREATE"),
-                ("RECRUITMENT_JD",       "UPDATE"),
-                ("RECRUITMENT_CV",       "VIEW"),
-                ("RECRUITMENT_CV",       "APPROVE"),
-                ("RECRUITMENT_RANKING",  "VIEW"),
-                ("RECRUITMENT_RANKING",  "EXPORT"),
-                ("REPORTS",              "VIEW"),
+                ("DASHBOARD",           "VIEW"),
+                ("RECRUITMENT",         "VIEW"),
+                ("RECRUITMENT_JD",      "VIEW"),
+                ("RECRUITMENT_JD",      "CREATE"),
+                ("RECRUITMENT_JD",      "UPDATE"),
+                ("RECRUITMENT_CV",      "VIEW"),
+                ("RECRUITMENT_CV",      "APPROVE"),
+                ("RECRUITMENT_RANKING", "VIEW"),
+                ("RECRUITMENT_RANKING", "EXPORT"),
+                ("REPORTS",             "VIEW"),
             };
             permissions.AddRange(hrPerms.Select(p => new Permission
             {
@@ -310,31 +316,32 @@ public static class DbInitializer
             }));
         }
 
-        // ── MENTOR — đào tạo + task ───────────────────────────
+        // Mentor
         var mentorRole = await roleManager.FindByNameAsync("Mentor");
         if (mentorRole != null)
         {
             var mentorPerms = new[]
             {
-                ("DASHBOARD",        "VIEW"),
-                ("LMS",              "VIEW"),
-                ("LMS_COURSES",      "VIEW"),
-                ("LMS_COURSES",      "CREATE"),
-                ("LMS_COURSES",      "UPDATE"),
-                ("LMS_COURSES",      "DELETE"),
-                ("LMS_QUIZ",         "VIEW"),
-                ("LMS_QUIZ",         "CREATE"),
-                ("LMS_QUIZ",         "UPDATE"),
-                ("LMS_QUIZ",         "DELETE"),
-                ("LMS_CERTIFICATE",  "VIEW"),
-                ("TASKS",            "VIEW"),
-                ("TASKS_BOARD",      "VIEW"),
-                ("TASKS_BOARD",      "CREATE"),
-                ("TASKS_BOARD",      "UPDATE"),
-                ("TASKS_REPORT",     "VIEW"),
-                ("TASKS_REPORT",     "UPDATE"),
-                ("TASKS_REPORT",     "APPROVE"),
-                ("REPORTS",          "VIEW"),
+                ("DASHBOARD",       "VIEW"),
+                ("LMS",             "VIEW"),
+                ("LMS_COURSES",     "VIEW"),
+                ("LMS_COURSES",     "CREATE"),
+                ("LMS_COURSES",     "UPDATE"),
+                ("LMS_COURSES",     "DELETE"),
+                ("LMS_QUIZ",        "VIEW"),
+                ("LMS_QUIZ",        "CREATE"),
+                ("LMS_QUIZ",        "UPDATE"),
+                ("LMS_QUIZ",        "DELETE"),
+                ("LMS_CERTIFICATE", "VIEW"),
+                ("TASKS",           "VIEW"),
+                ("TASKS_BOARD",     "VIEW"),
+                ("TASKS_BOARD",     "CREATE"),   // ← Tạo task
+                ("TASKS_BOARD",     "UPDATE"),   // ← Sửa task
+                ("TASKS_BOARD",     "DELETE"),   // ← Xóa task
+                ("TASKS_REPORT",    "VIEW"),
+                ("TASKS_REPORT",    "UPDATE"),
+                ("TASKS_REPORT",    "APPROVE"),
+                ("REPORTS",         "VIEW"),
             };
             permissions.AddRange(mentorPerms.Select(p => new Permission
             {
@@ -344,7 +351,7 @@ public static class DbInitializer
             }));
         }
 
-        // ── INTERN — học + làm bài + báo cáo ─────────────────
+        // Intern
         var internRole = await roleManager.FindByNameAsync("Intern");
         if (internRole != null)
         {
@@ -358,6 +365,7 @@ public static class DbInitializer
                 ("LMS_CERTIFICATE",  "VIEW"),
                 ("TASKS",            "VIEW"),
                 ("TASKS_BOARD",      "VIEW"),
+                ("TASKS_BOARD",      "UPDATE"),  // ← Đổi status task
                 ("TASKS_REPORT",     "VIEW"),
                 ("TASKS_REPORT",     "CREATE"),
                 ("TASKS_REPORT",     "UPDATE"),
@@ -373,6 +381,6 @@ public static class DbInitializer
         }
 
         await context.Permissions.AddRangeAsync(permissions);
-        Console.WriteLine($"✅ Seeded {permissions.Count} permissions for all roles.");
+        Console.WriteLine($"✅ Seeded {permissions.Count} permissions.");
     }
 }
