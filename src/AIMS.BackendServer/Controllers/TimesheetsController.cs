@@ -20,12 +20,12 @@ public class TimesheetsController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
-        [FromQuery] string? internId = null,
-        [FromQuery] int? taskId = null,
-        [FromQuery] DateTime? from = null,
-        [FromQuery] DateTime? to = null)
+    [FromQuery] string? internId = null,
+    [FromQuery] int? taskId = null,
+    [FromQuery] DateTime? from = null,
+    [FromQuery] DateTime? to = null)
     {
-        var userId = User.GetUserId();  // ⭐
+        var userId = User.GetUserId();
 
         var query = _context.Timesheets
             .Include(t => t.InternUser)
@@ -33,16 +33,34 @@ public class TimesheetsController : ControllerBase
             .AsQueryable();
 
         if (User.IsInRole("Intern"))
+        {
+            // Intern chỉ thấy của mình
             query = query.Where(t => t.InternUserId == userId);
+        }
+        else if (User.IsInRole("Mentor"))
+        {
+            // ⭐ Mentor thấy tất cả intern của mình
+            var internIds = await _context.InternAssignments
+                .Where(a => a.MentorUserId == userId)
+                .Select(a => a.InternUserId)
+                .ToListAsync();
+
+            query = query.Where(t => internIds.Contains(t.InternUserId));
+
+            // Nếu filter thêm theo internId cụ thể
+            if (!string.IsNullOrEmpty(internId))
+                query = query.Where(t => t.InternUserId == internId);
+        }
         else if (!string.IsNullOrEmpty(internId))
+        {
+            // Admin filter theo internId nếu có
             query = query.Where(t => t.InternUserId == internId);
+        }
 
         if (taskId.HasValue)
             query = query.Where(t => t.TaskId == taskId.Value);
-
         if (from.HasValue)
             query = query.Where(t => t.WorkDate >= from.Value);
-
         if (to.HasValue)
             query = query.Where(t => t.WorkDate <= to.Value);
 
@@ -64,7 +82,6 @@ public class TimesheetsController : ControllerBase
         var totalHours = result.Sum(t => t.HoursWorked);
         return Ok(new { totalHours, items = result });
     }
-
     [HttpPost]
     [Authorize(Roles = "Intern")]
     public async Task<IActionResult> Create(

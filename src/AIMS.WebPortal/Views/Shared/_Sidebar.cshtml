@@ -1,121 +1,140 @@
 @using System.Security.Claims
 
 @{
-    var roles = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+    var roles = User.Claims
+        .Where(c => c.Type == ClaimTypes.Role)
+        .Select(c => c.Value).ToList();
     bool isAdmin = roles.Contains("Admin");
     bool isHR = roles.Contains("HR") || isAdmin;
     bool isMentor = roles.Contains("Mentor") || isAdmin;
     bool isIntern = roles.Contains("Intern") || isAdmin;
-    var current = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+
+    var ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var area = ViewContext.RouteData.Values["area"]?.ToString() ?? "";
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
 }
 
 <ul class="nav flex-column mt-2 pb-4">
 
-    @* ── Dashboard (tất cả role) ─────────────────────── *@
     <li class="nav-item">
-        <a class="nav-link @(current == "Home" ? "active" : "")" asp-controller="Home" asp-action="Index">
-            <i class="bi bi-speedometer2"></i> Dashboard
+        <a class="nav-link @(ctrl == "Home" && area == "" ? "active" : "")" asp-controller="Home" asp-action="Index"
+               asp-area="">
+            <i class="bi bi-speedometer2 me-2"></i>Dashboard
         </a>
     </li>
 
-    @* ── TUYỂN DỤNG (Admin + HR) ─────────────────────── *@
+    @* ── HR ─────────────────────────────────────── *@
     @if (isHR)
     {
         <div class="nav-section">Tuyển dụng</div>
-
         <li class="nav-item">
-            <a class="nav-link @(current == "JobDescription" ? "active" : "")"        asp-area="HR" asp-controller="JobDescription"
-                   asp-action="Index">
-                <i class="bi bi-file-text"></i> Job Descriptions
+            <a class="nav-link @(area == "HR" && ctrl == "JobDescription" ? "active" : "")" asp-area="HR"
+                   asp-controller="JobDescription" asp-action="Index">
+                <i class="bi bi-file-text me-2"></i>Job Descriptions
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(current == "CVScreening" ? "active" : "")"         asp-area="HR" asp-controller="CVScreening"
-                   asp-action="Index">
-                <i class="bi bi-robot"></i> AI CV Screening
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(current == "Ranking" ? "active" : "")"          asp-area="HR" asp-controller="Ranking"
-                   asp-action="Index">
-                <i class="bi bi-trophy"></i> Ranking ứng viên
+            <a class="nav-link @(area == "HR" && ctrl == "Screening" ? "active" : "")" asp-area="HR"
+                   asp-controller="Screening" asp-action="Index">
+                <i class="bi bi-robot me-2"></i>AI Screening
             </a>
         </li>
     }
 
-    @* ── ĐÀO TẠO (Admin + Mentor + Intern) ──────────── *@
-    @if (isMentor || isIntern)
+    @* ── Mentor ──────────────────────────────────── *@
+    @if (isMentor)
     {
         <div class="nav-section">Đào tạo</div>
-
         <li class="nav-item">
-            <a class="nav-link @(current == "Course" ? "active" : "")"       asp-controller="Course" asp-action="Index">
-                <i class="bi bi-collection-play"></i> Khóa học
+            <a class="nav-link @(area == "Mentor" && ctrl == "Course" ? "active" : "")" asp-area="Mentor"
+                   asp-controller="Course"    asp-action="Index">
+                <i class="bi bi-collection-play me-2"></i>Khóa học
             </a>
         </li>
-        @if (isIntern)
-        {
-            <li class="nav-item">
-                <a class="nav-link @(current == "Quiz" ? "active" : "")"             asp-controller="Quiz" asp-action="Index">
-                    <i class="bi bi-pencil-square"></i> Bài kiểm tra
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link @(current == "Certificate" ? "active" : "")"            asp-controller="Certificate" asp-action="Index">
-                    <i class="bi bi-award"></i> Chứng chỉ của tôi
-                </a>
-            </li>
-        }
-    }
-
-    @* ── QUẢN LÝ THỰC TẬP (Mentor + Intern) ─────────── *@
-    @if (isMentor || isIntern)
-    {
+        <li class="nav-item">
+            <a class="nav-link @(area == "Mentor" && ctrl == "Quiz" ? "active" : "")" asp-area="Mentor"
+                   asp-controller="Quiz"               asp-action="Index">
+                <i class="bi bi-pencil-square me-2"></i>Quiz
+            </a>
+        </li>
         <div class="nav-section">Thực tập</div>
-
         <li class="nav-item">
-            <a class="nav-link @(current == "TaskBoard" ? "active" : "")"        asp-controller="TaskBoard" asp-action="Index">
-                <i class="bi bi-kanban"></i> Kanban Board
+            <a class="nav-link @(area == "Mentor" && ctrl == "Task" ? "active" : "")" asp-area="Mentor"
+                   asp-controller="Task"         asp-action="Index">
+                <i class="bi bi-kanban me-2"></i>Kanban Board
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(current == "DailyReport" ? "active" : "")"      asp-controller="DailyReport" asp-action="Index">
-                <i class="bi bi-journal-text"></i> Daily Report
+            <a class="nav-link @(area == "Mentor" && ctrl == "Dashboard" && action == "DailyReports" ? "active" : "")"
+                   asp-area="Mentor"              asp-controller="Dashboard" asp-action="DailyReports">
+                <i class="bi bi-journal-text me-2"></i>Daily Reports
+                @{
+                    // Badge số report chưa feedback
+                    var pending = ViewBag.PendingCount as int? ?? 0;
+                    if (pending > 0)
+                    {
+                        <span class="badge bg-danger rounded-pill ms-1">@pending</span>
+                    }
+                }
             </a>
         </li>
-        @if (isIntern)
-        {
-            <li class="nav-item">
-                <a class="nav-link @(current == "Timesheet" ? "active" : "")"    asp-controller="Timesheet" asp-action="Index">
-                    <i class="bi bi-clock"></i> Timesheet
-                </a>
-            </li>
-        }
+        <li class="nav-item">
+            <a class="nav-link @(area == "Mentor" && ctrl == "Dashboard" && action == "Timesheets" ? "active" : "")"
+                   asp-area="Mentor"                 asp-controller="Dashboard" asp-action="Timesheets">
+                <i class="bi bi-clock me-2"></i>Timesheet
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Mentor" && ctrl == "Dashboard" && action == "Index" ? "active" : "")"
+                   asp-area="Mentor"                asp-controller="Dashboard" asp-action="Index">
+                <i class="bi bi-bar-chart me-2"></i>Dashboard
+            </a>
+        </li>
     }
 
-    @* ── HỆ THỐNG (Admin only) ────────────────────────── *@
-    @if (isAdmin)
+    @* ── Intern ──────────────────────────────────── *@
+    @if (isIntern)
     {
-        <div class="nav-section">Hệ thống</div>
+        <div class="nav-section">Tuyển dụng</div>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Intern" && ctrl == "Apply" ? "active" : "")" asp-area="Intern"
+                   asp-controller="Apply" asp-action="Index">
+                <i class="bi bi-send me-2"></i>Nộp hồ sơ
+            </a>
+        </li>
 
+        <div class="nav-section">Học tập</div>
         <li class="nav-item">
-            <a class="nav-link @(current == "User" ? "active" : "")"          asp-area="Admin" asp-controller="User"
+            <a class="nav-link @(area == "Intern" && ctrl == "LMS" ? "active" : "")" asp-area="Intern" asp-controller="LMS"
                    asp-action="Index">
-                <i class="bi bi-people"></i> Quản lý Users
+                <i class="bi bi-play-circle me-2"></i>Khóa học của tôi
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(current == "Role" ? "active" : "")"   asp-area="Admin" asp-controller="Role"
-                   asp-action="Index">
-                <i class="bi bi-shield-check"></i> Quản lý Roles
+            <a class="nav-link @(area == "Intern" && ctrl == "Quiz" ? "active" : "")" asp-area="Intern"
+                   asp-controller="Quiz" asp-action="Index">
+                <i class="bi bi-patch-question me-2"></i>Bài kiểm tra
+            </a>
+        </li>
+
+        <div class="nav-section">Thực tập</div>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Intern" && ctrl == "Task" ? "active" : "")" asp-area="Intern"
+                   asp-controller="Task" asp-action="Index">
+                <i class="bi bi-list-task me-2"></i>Tasks của tôi
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(current == "Permission" ? "active" : "")"             asp-area="Admin" asp-controller="Permission"
-                   asp-action="Index">
-                <i class="bi bi-key"></i> Phân quyền
+            <a class="nav-link @(area == "Intern" && ctrl == "DailyReport" ? "active" : "")" asp-area="Intern"
+                   asp-controller="DailyReport" asp-action="Index">
+                <i class="bi bi-journal-text me-2"></i>Daily Report
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Intern" && ctrl == "Timesheet" ? "active" : "")" asp-area="Intern"
+                   asp-controller="Timesheet" asp-action="Index">
+                <i class="bi bi-clock me-2"></i>Timesheet
             </a>
         </li>
     }
-
 </ul>

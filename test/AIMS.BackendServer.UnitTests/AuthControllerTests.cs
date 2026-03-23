@@ -7,6 +7,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
+using Xunit;
 
 namespace AIMS.BackendServer.UnitTests;
 

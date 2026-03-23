@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
-
+using AIMS.WebPortal.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── HttpClient → gọi Backend API ──────────────────────────
@@ -21,6 +21,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddSession();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<BackendApiClient>();
 
 var app = builder.Build();
 
