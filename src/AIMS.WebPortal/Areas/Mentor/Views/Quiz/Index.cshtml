@@ -1,0 +1,126 @@
+@using AIMS.ViewModels.LMS
+@model List<QuizBankVm>
+@if (TempData["Success"] != null)
+{
+<div class="alert alert-success alert-dismissible">
+    @TempData["Success"]
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@{
+    ViewData["Title"] = "Quản lý Quiz";
+    var quizzes = Model ?? new List<QuizBankVm>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-pencil-square text-primary me-2"></i>Ngân hàng Quiz
+    </h5>
+    <button class="btn btn-primary" data-bs-toggle="modal"
+            data-bs-target="#createQuizModal">
+        <i class="bi bi-plus-lg me-1"></i>Tạo Quiz mới
+    </button>
+</div>
+
+<div class="row g-3">
+    @foreach (var q in quizzes)
+    {
+        <div class="col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="fw-bold">@q.Title</h6>
+                    <div class="text-muted small mb-3">@q.CourseTitle</div>
+                    <div class="d-flex gap-3 text-muted small mb-3">
+                        <span><i class="bi bi-question-circle me-1"></i>@q.TotalQuestions câu</span>
+                        <span><i class="bi bi-trophy me-1"></i>Pass: @q.PassScore%</span>
+                        <span><i class="bi bi-arrow-repeat me-1"></i>Max: @q.MaxAttempts lần</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a asp-action="Configure" asp-route-quizId="@q.Id"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-gear me-1"></i>Cấu hình câu hỏi
+                        </a>
+                        <a asp-action="Edit" asp-route-quizId="@q.Id"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form asp-action="Delete" method="post" class="d-inline"
+                              onsubmit="return confirm('Xóa Quiz này? Tất cả câu hỏi sẽ bị xóa!')">
+                            <input type="hidden" name="quizId" value="@q.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal tạo Quiz -->
+<div class="modal fade" id="createQuizModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-plus-circle text-primary me-2"></i>Tạo Quiz mới
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Create" method="post">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Khóa học</label>
+                        <select name="courseId" class="form-select" required>
+                            <option value="">-- Chọn khóa học --</option>
+                            @foreach (var c in ViewBag.Courses as List<CourseVm> ?? new())
+                            {
+                                <option value="@c.Id">@c.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tên Quiz</label>
+                        <input name="title" class="form-control"
+                               placeholder="VD: Kiểm tra C# cơ bản" required />
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Điểm pass (%)</label>
+                            <input name="passScore" type="number"
+                                   step="5" min="0" max="100"
+                                   class="form-control" value="70" required />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Giới hạn giờ</label>
+                            <input name="timeLimit" type="number"
+                                   min="1" class="form-control"
+                                   placeholder="Phút (bỏ trống = không giới hạn)" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Số lần thi tối đa</label>
+                            <input name="maxAttempts" type="number"
+                                   min="1" max="10"
+                                   class="form-control" value="3" required />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Tạo Quiz
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,101 @@
+@{
+    ViewData["Title"] = "Nộp hồ sơ";
+    var apps = Model as List<dynamic> ?? new();
+    var jds  = ViewBag.JDs as List<dynamic> ?? new();
+}
+
+<div class="row g-4">
+    <!-- Form nộp hồ sơ -->
+    <div class="col-md-5">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                <i class="bi bi-send text-primary me-2"></i>Nộp hồ sơ
+            </div>
+            <div class="card-body">
+                @if (TempData["Success"] != null)
+                {
+                    <div class="alert alert-success py-2">@TempData["Success"]</div>
+                }
+                @if (TempData["Error"] != null)
+                {
+                    <div class="alert alert-danger py-2">@TempData["Error"]</div>
+                }
+                <form asp-action="Apply" method="post"
+                      enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Vị trí ứng tuyển</label>
+                        <select name="jobDescriptionId" class="form-select" required>
+                            <option value="">-- Chọn vị trí --</option>
+                            @foreach (var jd in jds)
+                            {
+                                <option value="@jd.id">@jd.title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">File CV (PDF)</label>
+                        <input type="file" name="cvFile"
+                               accept=".pdf,.doc,.docx"
+                               class="form-control" required />
+                        <small class="text-muted">Hỗ trợ PDF, Word</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Cover Letter</label>
+                        <textarea name="coverLetter" class="form-control"
+                                  rows="3" placeholder="Giới thiệu bản thân..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-send me-1"></i>Nộp hồ sơ
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lịch sử + AI Result -->
+    <div class="col-md-7">
+        <h6 class="fw-bold mb-3">Hồ sơ đã nộp</h6>
+        @foreach (var app in apps)
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="fw-semibold">@app.jobDescription?.title</span>
+                        <span class="badge @(app.status?.ToString()=="ACCEPTED"?"bg-success":app.status?.ToString()=="REJECTED"?"bg-danger":app.status?.ToString()=="INTERVIEW"?"bg-info":"bg-secondary")">
+                            @app.status
+                        </span>
+                    </div>
+
+                    @if (app.aiScreeningResult != null)
+                    {
+                        <div class="mt-2 p-3 bg-light rounded">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small class="text-muted">
+                                    <i class="bi bi-robot me-1"></i>AI Score
+                                </small>
+                                <strong class="text-primary">
+                                    @app.aiScreeningResult.matchingScore%
+                                </strong>
+                            </div>
+                            <div class="progress" style="height:6px">
+                                <div class="progress-bar @(app.aiScreeningResult.matchingScore >= 70 ? "bg-success" : "bg-warning")"
+                                     style="width:@(app.aiScreeningResult.matchingScore)%">
+                                </div>
+                            </div>
+                            <small class="text-success mt-1 d-block">
+                                ✅ @app.aiScreeningResult.keywordsMatched
+                            </small>
+                        </div>
+                    }
+                    else
+                    {
+                        <small class="text-muted">
+                            <i class="bi bi-hourglass-split me-1"></i>
+                            Chờ HR chạy AI Screening...
+                        </small>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,89 @@
+@using AIMS.ViewModels.LMS
+@model List<EnrollmentVm>
+
+@{
+    ViewData["Title"] = "Khóa học của tôi";
+    var enrollments = Model ?? new List<EnrollmentVm>();
+    var allCourses = ViewBag.AllCourses as List<CourseVm> ?? new List<CourseVm>();
+
+    // ⭐ Typed → không còn lỗi JsonElement
+    var enrolledIds = enrollments
+        .Select(e => e.CourseId.ToString())
+        .ToHashSet();
+}
+
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#enrolled">
+            Đã đăng ký (@enrollments.Count)
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#discover">Khám phá</a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="enrolled">
+        <div class="row g-3">
+            @foreach (var e in enrollments)
+            {
+                <div class="col-md-6 col-xl-4">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="fw-bold">@e.CourseTitle</h6>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <small class="text-muted">Tiến độ</small>
+                                    <small class="fw-bold text-primary">
+                                        @e.CompletionPercent%
+                                    </small>
+                                </div>
+                                <div class="progress" style="height:8px">
+                                    <div class="progress-bar bg-primary"                                         style="width:@e.CompletionPercent%"></div>
+                                </div>
+                            </div>
+                            @if (e.CompletionPercent >= 100)
+                            {
+                                <span class="badge bg-success mb-2">✅ Hoàn thành</span>
+                            }
+                            <a asp-action="Learn" asp-route-courseId="@e.CourseId" class="btn btn-primary btn-sm w-100">
+                                <i class="bi bi-play-fill me-1"></i>
+                                @(e.CompletionPercent > 0 ? "Tiếp tục học" : "Bắt đầu học")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="discover">
+        <div class="row g-3">
+            @foreach (var c in allCourses.Where(c => !enrolledIds.Contains(c.Id.ToString())))
+            {
+                <div class="col-md-6 col-xl-4">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <span
+                                class="badge @(c.Level == "BEGINNER" ? "bg-success" : c.Level == "INTERMEDIATE" ? "bg-warning text-dark" : "bg-danger") mb-2">
+                                @c.Level
+                            </span>
+                            <h6 class="fw-bold">@c.Title</h6>
+                            <p class="text-muted small">@c.Description</p>
+                            <div class="text-muted small mb-3">
+                                <i class="bi bi-play-circle me-1"></i>@c.TotalLessons bài học
+                            </div>
+                            <form asp-action="Enroll" method="post">
+                                <input type="hidden" name="courseId" value="@c.Id" />
+                                <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+                                    <i class="bi bi-plus-lg me-1"></i>Đăng ký học
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>

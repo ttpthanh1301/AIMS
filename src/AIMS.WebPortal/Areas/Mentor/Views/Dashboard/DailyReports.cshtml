@@ -1,0 +1,117 @@
+@using AIMS.ViewModels.TaskManagement
+@model List<DailyReportVm>
+@{
+    ViewData["Title"] = "Daily Reports";
+    var reports = Model ?? new List<DailyReportVm>();
+    var assignments = ViewBag.Assignments as List<InternAssignmentVm>
+        ?? new List<InternAssignmentVm>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-journal-text text-primary me-2"></i>Daily Reports
+    </h5>
+    <!-- Filter theo intern -->
+    <form method="get" class="d-flex gap-2">
+        <select name="internId" class="form-select form-select-sm" style="width:200px"     onchange="this.form.submit()">
+            <option value="">Tất cả Intern</option>
+            @foreach (var a in assignments)
+            {
+                var selected = ViewBag.InternId?.ToString() == a.InternUserId;
+                if (selected)
+                {
+                    <option value="@a.InternUserId" selected>@a.InternName</option>
+                }
+                else
+                {
+                    <option value="@a.InternUserId">@a.InternName</option>
+                }
+            }
+        </select>
+    </form>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (!reports.Any())
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>Chưa có báo cáo nào.
+    </div>
+}
+
+@foreach (var r in reports)
+{
+    <div class="card border-0 shadow-sm mb-3 @(!r.HasFeedback ? "border-start border-warning border-3" : "")">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <span class="fw-bold text-primary">@r.InternName</span>
+                    <span class="text-muted ms-2">
+                        📅 @r.ReportDate.ToString("dd/MM/yyyy")
+                    </span>
+                </div>
+                @if (!r.HasFeedback)
+                {
+                    <span class="badge bg-warning text-dark">Chờ phản hồi</span>
+                }
+                else
+                {
+                    <span class="badge bg-success">Đã phản hồi</span>
+                }
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <small class="text-muted fw-semibold d-block mb-1">
+                        <i class="bi bi-check2-circle me-1"></i>Hôm nay đã làm
+                    </small>
+                    <p class="mb-0 small">@r.Content</p>
+                </div>
+                @if (r.PlannedTomorrow != null)
+                {
+                    <div class="col-md-4">
+                        <small class="text-muted fw-semibold d-block mb-1">
+                            <i class="bi bi-calendar-plus me-1"></i>Kế hoạch ngày mai
+                        </small>
+                        <p class="mb-0 small">@r.PlannedTomorrow</p>
+                    </div>
+                }
+                @if (r.Issues != null)
+                {
+                    <div class="col-md-4">
+                        <small class="text-muted fw-semibold d-block mb-1">
+                            <i class="bi bi-exclamation-triangle me-1 text-warning"></i>Vấn đề
+                        </small>
+                        <p class="mb-0 small text-warning">@r.Issues</p>
+                    </div>
+                }
+            </div>
+
+            @if (r.HasFeedback)
+            {
+                <div class="alert alert-success py-2 mb-0">
+                    <strong><i class="bi bi-chat-dots me-1"></i>Phản hồi của bạn:</strong>
+                    @r.MentorFeedback
+                </div>
+            }
+            else
+            {
+                <form asp-action="Feedback" method="post"            class="d-flex gap-2 mt-2">
+                    <input type="hidden" name="reportId" value="@r.Id" />
+                    <input name="feedback" class="form-control form-control-sm"      placeholder="Nhập phản hồi cho intern..."
+                           required />
+                    <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                        <i class="bi bi-send me-1"></i>Gửi
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+}

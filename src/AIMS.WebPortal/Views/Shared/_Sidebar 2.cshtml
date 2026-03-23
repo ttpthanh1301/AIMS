@@ -1,0 +1,121 @@
+@using System.Security.Claims
+
+@{
+    var roles = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+    bool isAdmin = roles.Contains("Admin");
+    bool isHR = roles.Contains("HR") || isAdmin;
+    bool isMentor = roles.Contains("Mentor") || isAdmin;
+    bool isIntern = roles.Contains("Intern") || isAdmin;
+    var current = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+}
+
+<ul class="nav flex-column mt-2 pb-4">
+
+    @* ── Dashboard (tất cả role) ─────────────────────── *@
+    <li class="nav-item">
+        <a class="nav-link @(current == "Home" ? "active" : "")" asp-controller="Home" asp-action="Index">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+    </li>
+
+    @* ── TUYỂN DỤNG (Admin + HR) ─────────────────────── *@
+    @if (isHR)
+    {
+        <div class="nav-section">Tuyển dụng</div>
+
+        <li class="nav-item">
+            <a class="nav-link @(current == "JobDescription" ? "active" : "")"        asp-area="HR" asp-controller="JobDescription"
+                   asp-action="Index">
+                <i class="bi bi-file-text"></i> Job Descriptions
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(current == "CVScreening" ? "active" : "")"         asp-area="HR" asp-controller="CVScreening"
+                   asp-action="Index">
+                <i class="bi bi-robot"></i> AI CV Screening
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(current == "Ranking" ? "active" : "")"          asp-area="HR" asp-controller="Ranking"
+                   asp-action="Index">
+                <i class="bi bi-trophy"></i> Ranking ứng viên
+            </a>
+        </li>
+    }
+
+    @* ── ĐÀO TẠO (Admin + Mentor + Intern) ──────────── *@
+    @if (isMentor || isIntern)
+    {
+        <div class="nav-section">Đào tạo</div>
+
+        <li class="nav-item">
+            <a class="nav-link @(current == "Course" ? "active" : "")"       asp-controller="Course" asp-action="Index">
+                <i class="bi bi-collection-play"></i> Khóa học
+            </a>
+        </li>
+        @if (isIntern)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(current == "Quiz" ? "active" : "")"             asp-controller="Quiz" asp-action="Index">
+                    <i class="bi bi-pencil-square"></i> Bài kiểm tra
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(current == "Certificate" ? "active" : "")"            asp-controller="Certificate" asp-action="Index">
+                    <i class="bi bi-award"></i> Chứng chỉ của tôi
+                </a>
+            </li>
+        }
+    }
+
+    @* ── QUẢN LÝ THỰC TẬP (Mentor + Intern) ─────────── *@
+    @if (isMentor || isIntern)
+    {
+        <div class="nav-section">Thực tập</div>
+
+        <li class="nav-item">
+            <a class="nav-link @(current == "TaskBoard" ? "active" : "")"        asp-controller="TaskBoard" asp-action="Index">
+                <i class="bi bi-kanban"></i> Kanban Board
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(current == "DailyReport" ? "active" : "")"      asp-controller="DailyReport" asp-action="Index">
+                <i class="bi bi-journal-text"></i> Daily Report
+            </a>
+        </li>
+        @if (isIntern)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(current == "Timesheet" ? "active" : "")"    asp-controller="Timesheet" asp-action="Index">
+                    <i class="bi bi-clock"></i> Timesheet
+                </a>
+            </li>
+        }
+    }
+
+    @* ── HỆ THỐNG (Admin only) ────────────────────────── *@
+    @if (isAdmin)
+    {
+        <div class="nav-section">Hệ thống</div>
+
+        <li class="nav-item">
+            <a class="nav-link @(current == "User" ? "active" : "")"          asp-area="Admin" asp-controller="User"
+                   asp-action="Index">
+                <i class="bi bi-people"></i> Quản lý Users
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(current == "Role" ? "active" : "")"   asp-area="Admin" asp-controller="Role"
+                   asp-action="Index">
+                <i class="bi bi-shield-check"></i> Quản lý Roles
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(current == "Permission" ? "active" : "")"             asp-area="Admin" asp-controller="Permission"
+                   asp-action="Index">
+                <i class="bi bi-key"></i> Phân quyền
+            </a>
+        </li>
+    }
+
+</ul>

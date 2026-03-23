@@ -1,0 +1,61 @@
+@{
+    ViewData["Title"] = "Job Descriptions";
+    var jds = Model as List<dynamic> ?? new();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-file-text text-primary me-2"></i>Job Descriptions
+    </h5>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Tạo JD mới
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Tiêu đề</th>
+                    <th>Vị trí</th>
+                    <th>Required Skills</th>
+                    <th>Status</th>
+                    <th>Deadline</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var jd in jds)
+                {
+                    <tr>
+                        <td>@jd.id</td>
+                        <td class="fw-semibold">@jd.title</td>
+                        <td>@jd.jobPositionTitle</td>
+                        <td>
+                            <small class="text-muted">@jd.requiredSkills</small>
+                        </td>
+                        <td>
+                            <span class="badge @(jd.status == "OPEN" ? "bg-success" : "bg-secondary")">
+                                @jd.status
+                            </span>
+                        </td>
+                        <td>@jd.deadlineDate</td>
+                        <td>
+                            <a asp-area="HR" asp-controller="Screening"            asp-action="Ranking" asp-route-jdId="@jd.id"
+                                   class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-trophy"></i> Ranking
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

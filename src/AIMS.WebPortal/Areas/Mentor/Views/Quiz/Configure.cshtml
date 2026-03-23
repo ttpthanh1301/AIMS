@@ -1,0 +1,195 @@
+@using AIMS.ViewModels.LMS
+@model QuizBankVm
+@{
+    ViewData["Title"] = "Cấu hình Quiz";
+    var quiz = Model;
+}
+
+<div class="d-flex justify-content-between mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-gear text-primary me-2"></i>@quiz?.Title
+    </h5>
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Quay lại
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-md-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                Câu hỏi hiện có
+                <span class="badge bg-primary ms-2">@quiz?.TotalQuestions</span>
+            </div>
+            <div class="card-body p-0">
+                @if (quiz?.Questions != null && quiz.Questions.Any())
+                {
+                    int idx = 1;
+                    foreach (var q in quiz.Questions)
+                    {
+                        <div class="p-3 border-bottom">
+                            <div class="fw-semibold mb-2">
+                                @idx. @q.QuestionText
+                                <span class="badge bg-info ms-2">@q.Score điểm</span>
+                            </div>
+                            @foreach (var opt in q.Options)
+                            {
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <i class="bi @(opt.IsCorrect
+                                        ? "bi-check-circle-fill text-success"
+                                        : "bi-circle text-muted")"></i>
+                                    <span class="@(opt.IsCorrect
+                                        ? "text-success fw-semibold"
+                                        : "text-muted")">
+                                        @opt.OptionText
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                        idx++;
+                    }
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-inbox fs-2"></i>
+                        <p class="mt-2">Chưa có câu hỏi nào.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                <i class="bi bi-plus-circle text-primary me-2"></i>Thêm câu hỏi
+            </div>
+            <div class="card-body">
+                <form asp-action="AddQuestion" method="post" id="questionForm">
+                    <input type="hidden" name="quizId" value="@quiz?.Id" />
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Câu hỏi</label>
+                        <textarea name="questionText" class="form-control"
+                                  rows="3" required
+                                  placeholder="Nhập nội dung câu hỏi..."></textarea>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-7">
+                            <label class="form-label fw-semibold">Loại</label>
+                            <select name="questionType" class="form-select form-select-sm">
+                                <option value="SINGLE">Single choice</option>
+                                <option value="MULTIPLE">Multiple choice</option>
+                            </select>
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label fw-semibold">Điểm</label>
+                            <input name="score" type="number" step="0.5"
+                                   class="form-control form-control-sm"
+                                   value="1" min="0.5" />
+                        </div>
+                    </div>
+
+                    <label class="form-label fw-semibold">
+                        Đáp án <small class="text-muted">(✓ = đúng)</small>
+                    </label>
+
+                    <div id="optionsList">
+                        @for (int i = 0; i < 4; i++)
+                        {
+                            <div class="input-group mb-2 option-row">
+                                <div class="input-group-text bg-white">
+                                    <input type="checkbox"
+                                           name="isCorrects"
+                                           value="true"
+                                           title="Đáp án đúng" />
+                                </div>
+                                <input type="text"
+                                       name="optionTexts"
+                                       class="form-control form-control-sm"
+                                       placeholder="Đáp án @(i + 1)" />
+                                @if (i >= 2)
+                                {
+                                    <button type="button"
+                                            class="btn btn-outline-danger btn-sm"
+                                            onclick="removeOption(this)">✕</button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary btn-sm w-100 mb-3"
+                            onclick="addOption()">
+                        <i class="bi bi-plus me-1"></i>Thêm đáp án
+                    </button>
+
+                    <button type="submit" class="btn btn-primary w-100"
+                            onclick="return prepareSubmit()">
+                        <i class="bi bi-check-lg me-1"></i>Lưu câu hỏi
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function addOption() {
+    const list  = document.getElementById('optionsList');
+    const count = list.querySelectorAll('.option-row').length + 1;
+    list.insertAdjacentHTML('beforeend', `
+        <div class="input-group mb-2 option-row">
+            <div class="input-group-text bg-white">
+                <input type="checkbox" name="isCorrects"
+                       value="true" title="Đáp án đúng" />
+            </div>
+            <input type="text" name="optionTexts"
+                   class="form-control form-control-sm"
+                   placeholder="Đáp án ${count}" />
+            <button type="button" class="btn btn-outline-danger btn-sm"
+                    onclick="removeOption(this)">✕</button>
+        </div>`);
+}
+
+function removeOption(btn) {
+    btn.closest('.option-row').remove();
+}
+
+function prepareSubmit() {
+    const rows = document.querySelectorAll('#optionsList .option-row');
+    rows.forEach(row => {
+        const cb = row.querySelector('input[type=checkbox]');
+        if (!cb.checked) {
+            let hidden = row.querySelector('input[type=hidden][name=isCorrects]');
+            if (!hidden) {
+                hidden       = document.createElement('input');
+                hidden.type  = 'hidden';
+                hidden.name  = 'isCorrects';
+                hidden.value = 'false';
+                row.appendChild(hidden);
+            }
+        }
+    });
+    return true;
+}
+</script>
+}

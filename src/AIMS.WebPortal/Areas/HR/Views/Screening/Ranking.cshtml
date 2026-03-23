@@ -1,0 +1,115 @@
+@{
+    ViewData["Title"] = "Ranking List";
+    int jdId   = ViewBag.JdId;
+    var result = ViewBag.Result as dynamic;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-trophy text-warning me-2"></i>
+        AI Ranking List — JD #@jdId
+    </h5>
+    <form asp-action="RunBatch" method="post" class="d-inline">
+        <input type="hidden" name="jdId" value="@jdId" />
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-robot me-1"></i>Chạy AI Screening
+        </button>
+    </form>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@{
+    // ⭐ Cast an toàn trước khi dùng
+    var rankingList = result != null
+        ? result.ranking as IEnumerable<dynamic>
+        : null;
+}
+
+@if (rankingList != null)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Rank</th>
+                        <th>Ứng viên</th>
+                        <th>Email</th>
+                        <th style="width:200px">AI Score</th>
+                        <th>Keywords Matched</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in rankingList)
+                    {
+                        // ⭐ Cast từng field trước khi dùng trong expression
+                        int    rank          = item.rank          != null ? (int)item.rank          : 0;
+                        double matchingScore = item.matchingScore != null ? (double)item.matchingScore : 0;
+                        string status        = item.status        != null ? (string)item.status        : "";
+                        string appId         = item.applicationId != null ? item.applicationId.ToString() : "0";
+
+                        string rankBadge  = rank == 1  ? "bg-warning text-dark"
+                                         : rank <= 3   ? "bg-info"
+                                         :               "bg-secondary";
+
+                        string scoreBadge = matchingScore >= 70 ? "bg-success"
+                                         : matchingScore >= 50  ? "bg-warning"
+                                         :                         "bg-danger";
+
+                        string statusBadge = status == "ACCEPTED" ? "bg-success"
+                                          : status == "REJECTED"  ? "bg-danger"
+                                          :                          "bg-secondary";
+
+                        <tr>
+                            <td>
+                                <span class="badge @rankBadge">#@rank</span>
+                            </td>
+                            <td class="fw-semibold">@item.applicantName</td>
+                            <td class="text-muted small">@item.applicantEmail</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress flex-grow-1" style="height:8px">
+                                        <div class="progress-bar @scoreBadge"
+                                             style="width:@(matchingScore)%">
+                                        </div>
+                                    </div>
+                                    <span class="fw-bold" style="min-width:45px">
+                                        @(Math.Round(matchingScore, 1))%
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <small class="text-success">
+                                    ✅ @item.keywordsMatched
+                                </small>
+                            </td>
+                            <td>
+                                <span class="badge @statusBadge">@status</span>
+                            </td>
+                            <td>
+                                <a asp-action="CVDetail"
+                                   asp-route-applicationId="@appId"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-info-circle me-2"></i>
+        Chưa có kết quả AI. Nhấn <strong>Chạy AI Screening</strong> để bắt đầu.
+    </div>
+}

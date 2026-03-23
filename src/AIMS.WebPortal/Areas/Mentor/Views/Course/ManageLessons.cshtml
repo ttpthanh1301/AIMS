@@ -1,0 +1,147 @@
+@using AIMS.ViewModels.LMS
+@model CourseVm
+@{
+    ViewData["Title"] = "Quản lý Bài học";
+    int courseId = ViewBag.CourseId;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-collection-play text-primary me-2"></i>@Model?.Title
+    </h5>
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Quay lại
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-md-8">
+        @if (Model?.Chapters != null && Model.Chapters.Any())
+        {
+            foreach (var chapter in Model.Chapters.OrderBy(ch => ch.SortOrder))
+            {
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">
+                            <i class="bi bi-folder me-2"></i>@chapter.Title
+                        </span>
+                        <div class="d-flex gap-2 align-items-center">
+                            <span class="badge bg-secondary">@chapter.Lessons.Count bài</span>
+                            <form asp-action="DeleteChapter" method="post" class="d-inline"
+                                  onsubmit="return confirm('Xóa chương này?')">
+                                <input type="hidden" name="courseId"  value="@courseId" />
+                                <input type="hidden" name="chapterId" value="@chapter.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @foreach (var lesson in chapter.Lessons.OrderBy(l => l.SortOrder))
+                        {
+                            <div class="d-flex align-items-center p-3 border-bottom">
+                                <i class="bi @(lesson.LessonType=="VIDEO"?"bi-play-circle text-primary":lesson.LessonType=="DOCUMENT"?"bi-file-pdf text-danger":"bi-pencil-square text-warning") me-3 fs-5"></i>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold small">@lesson.Title</div>
+                                    <small class="text-muted">@lesson.LessonType · @lesson.DurationMinutes phút</small>
+                                </div>
+                                <form asp-action="DeleteLesson" method="post" class="d-inline"
+                                      onsubmit="return confirm('Xóa bài học này?')">
+                                    <input type="hidden" name="courseId"  value="@courseId" />
+                                    <input type="hidden" name="lessonId"  value="@lesson.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        }
+
+                        <div class="p-3 bg-light">
+                            <form asp-action="AddLesson" method="post">
+                                <input type="hidden" name="courseId"  value="@courseId" />
+                                <input type="hidden" name="chapterId" value="@chapter.Id" />
+                                <input type="hidden" name="sortOrder"
+                                       value="@(chapter.Lessons.Count + 1)" />
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-4">
+                                        <input name="title" class="form-control form-control-sm"
+                                               placeholder="Tên bài học" required />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <select name="lessonType" class="form-select form-select-sm">
+                                            <option value="VIDEO">Video</option>
+                                            <option value="DOCUMENT">Document</option>
+                                            <option value="QUIZ">Quiz</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input name="contentUrl" class="form-control form-control-sm"
+                                               placeholder="URL" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input name="durationMinutes" type="number"
+                                               class="form-control form-control-sm"
+                                               placeholder="Phút" />
+                                    </div>
+                                    <div class="col-md-1">
+                                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                                            <i class="bi bi-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>Chưa có chương nào.
+            </div>
+        }
+    </div>
+
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                <i class="bi bi-folder-plus text-primary me-2"></i>Thêm chương
+            </div>
+            <div class="card-body">
+                <form asp-action="AddChapter" method="post">
+                    <input type="hidden" name="courseId" value="@courseId" />
+                    <div class="mb-3">
+                        <label class="form-label">Tên chương</label>
+                        <input name="title" class="form-control"
+                               placeholder="VD: Chương 1: Nhập môn" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Thứ tự</label>
+                        <input name="sortOrder" type="number" class="form-control"
+                               value="@((Model?.Chapters.Count ?? 0) + 1)" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg me-1"></i>Thêm chương
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

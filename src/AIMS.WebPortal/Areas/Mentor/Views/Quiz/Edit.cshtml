@@ -1,0 +1,72 @@
+@using AIMS.ViewModels.LMS
+@model QuizBankVm
+@{
+    ViewData["Title"] = "Chỉnh sửa Quiz";
+    var quiz = Model;
+    var courses = ViewBag.Courses as List<CourseVm> ?? new List<CourseVm>();
+}
+
+<div class="d-flex justify-content-between mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-pencil text-primary me-2"></i>Chỉnh sửa Quiz
+    </h5>
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Quay lại
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:600px">
+    <div class="card-body">
+        <form asp-action="Edit" method="post">
+            <input type="hidden" name="quizId" value="@quiz?.Id" />
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Khóa học</label>
+                <select name="courseId" class="form-select" required>
+                    <option value="">-- Chọn khóa học --</option>
+                    @foreach (var c in courses)
+                    {
+                        if (c.Id == quiz?.CourseId)
+                        {
+                            <option value="@c.Id" selected>@c.Title</option>
+                        }
+                        else
+                        {
+                            <option value="@c.Id">@c.Title</option>
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Tên Quiz</label>
+                <input name="title" class="form-control" value="@quiz?.Title" required />
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-semibold">Điểm pass (%)</label>
+                    <input name="passScore" type="number" step="5" min="0" max="100" class="form-control"
+                           value="@quiz?.PassScore" required />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-semibold">Giới hạn giờ (phút)</label>
+                    <input name="timeLimit" type="number" min="1" class="form-control" value="@quiz?.TimeLimit"
+                           placeholder="Bỏ trống = không giới hạn" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-semibold">Số lần thi tối đa</label>
+                    <input name="maxAttempts" type="number" min="1" max="10" class="form-control"
+                           value="@quiz?.MaxAttempts" required />
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Lưu thay đổi
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary">Hủy</a>
+            </div>
+        </form>
+    </div>
+</div>
