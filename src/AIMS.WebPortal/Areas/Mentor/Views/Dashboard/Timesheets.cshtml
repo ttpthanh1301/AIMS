@@ -1,0 +1,83 @@
+@using AIMS.ViewModels.TaskManagement
+@model TimesheetResultVm
+@{
+    ViewData["Title"] = "Timesheet Intern";
+    var assignments = ViewBag.Assignments as List<InternAssignmentVm>
+        ?? new List<InternAssignmentVm>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-clock text-primary me-2"></i>Timesheet Intern
+    </h5>
+    <form method="get" class="d-flex gap-2">
+        <select name="internId" class="form-select form-select-sm" style="width:200px"            onchange="this.form.submit()">
+            <option value="">Tất cả Intern</option>
+            @foreach (var a in assignments)
+            {
+                var selected = ViewBag.InternId?.ToString() == a.InternUserId;
+                if (selected)
+                {
+                    <option value="@a.InternUserId" selected>@a.InternName</option>
+                }
+                else
+                {
+                    <option value="@a.InternUserId">@a.InternName</option>
+                }
+            }
+        </select>
+    </form>
+</div>
+
+@if (Model != null)
+{
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body d-flex align-items-center gap-3">
+            <div class="rounded-3 bg-primary bg-opacity-10 p-3">
+                <i class="bi bi-clock text-primary fs-3"></i>
+            </div>
+            <div>
+                <div class="text-muted small">Tổng giờ đã log</div>
+                <div class="fs-3 fw-bold text-primary">@Model.TotalHours h</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Intern</th>
+                        <th>Ngày</th>
+                        <th>Task</th>
+                        <th>Giờ làm</th>
+                        <th>Ghi chú</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ts in Model.Items)
+                    {
+                        <tr>
+                            <td class="fw-semibold text-primary">@ts.InternName</td>
+                            <td>@ts.WorkDate.ToString("dd/MM/yyyy")</td>
+                            <td class="small">@ts.TaskTitle</td>
+                            <td>
+                                <span class="badge bg-primary">@ts.HoursWorked h</span>
+                            </td>
+                            <td class="text-muted small">@ts.WorkNote</td>
+                        </tr>
+                    }
+                    @if (!Model.Items.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                Chưa có dữ liệu timesheet.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

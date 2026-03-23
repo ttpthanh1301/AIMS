@@ -1,0 +1,133 @@
+@using AIMS.ViewModels.TaskManagement
+@model MentorDashboardVm
+@{
+    ViewData["Title"] = "Dashboard Mentor";
+    var data           = Model;
+    var pendingReports = ViewBag.PendingReports as List<DailyReportVm>
+        ?? new List<DailyReportVm>();
+}
+
+@* ⭐ Thông báo report chưa feedback *@
+@if (pendingReports.Any())
+{
+    <div class="alert alert-warning alert-dismissible d-flex align-items-center gap-3 mb-4">
+        <i class="bi bi-bell-fill fs-4"></i>
+        <div class="flex-grow-1">
+            <strong>@pendingReports.Count báo cáo chưa được phản hồi!</strong>
+            <div class="mt-1">
+                @foreach (var r in pendingReports.Take(3))
+                {
+                    <span class="badge bg-warning text-dark me-1">
+                        @r.InternName — @r.ReportDate.ToString("dd/MM")
+                    </span>
+                }
+                @if (pendingReports.Count > 3)
+                {
+                    <span class="text-muted small">và @(pendingReports.Count - 3) báo cáo khác...</span>
+                }
+            </div>
+        </div>
+        <a asp-action="DailyReports" class="btn btn-warning btn-sm">
+            <i class="bi bi-eye me-1"></i>Xem ngay
+        </a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (data != null)
+{
+    <div class="row g-4 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-primary bg-opacity-10 p-3">
+                        <i class="bi bi-people text-primary fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Tổng Intern</div>
+                        <div class="fs-4 fw-bold">@data.Summary.TotalInterns</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-success bg-opacity-10 p-3">
+                        <i class="bi bi-check-circle text-success fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Task Done</div>
+                        <div class="fs-4 fw-bold">@data.Summary.TotalDone</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-danger bg-opacity-10 p-3">
+                        <i class="bi bi-exclamation-triangle text-danger fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Overdue</div>
+                        <div class="fs-4 fw-bold">@data.Summary.TotalOverdue</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-warning bg-opacity-10 p-3">
+                        <i class="bi bi-journal-text text-warning fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Chờ feedback</div>
+                        <div class="fs-4 fw-bold">@pendingReports.Count</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-semibold border-0 pt-3">
+            <i class="bi bi-bar-chart text-primary me-2"></i>Hiệu suất từng Intern
+        </div>
+        <div class="card-body">
+            <canvas id="internChart" height="100"></canvas>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+var labels = [], completionData = [], hoursData = [];
+@if (data?.Interns != null)
+{
+    foreach (var intern in data.Interns)
+    {
+        @:labels.push('@intern.InternName');
+        @:completionData.push(@intern.CompletionRate);
+        @:hoursData.push(@intern.TotalHours);
+    }
+}
+new Chart(document.getElementById('internChart'), {
+    type: 'bar',
+    data: {
+        labels,
+        datasets: [
+            { label: 'Completion %', data: completionData,
+              backgroundColor: 'rgba(13,110,253,.7)', borderRadius: 6 },
+            { label: 'Giờ làm', data: hoursData,
+              backgroundColor: 'rgba(25,135,84,.7)', borderRadius: 6 }
+        ]
+    },
+    options: {
+        plugins: { legend: { position: 'top' } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+</script>
+}

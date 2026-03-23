@@ -1,0 +1,51 @@
+@using AIMS.ViewModels.LMS
+@model QuizResultVm
+@{
+    ViewData["Title"] = "Kết quả";
+    var result = Model;
+}
+
+<div class="text-center py-5">
+    @if (result.IsPassed)
+    {
+        <div class="display-1">🎉</div>
+        <h3 class="fw-bold text-success mt-3">Chúc mừng! Bạn đã vượt qua!</h3>
+    }
+    else
+    {
+        <div class="display-1">😢</div>
+        <h3 class="fw-bold text-danger mt-3">Chưa đạt — Cố gắng hơn nhé!</h3>
+    }
+
+    <div class="card border-0 shadow-sm d-inline-block mt-4 px-5 py-4">
+        <div class="row g-4">
+            <div class="col-4 text-center">
+                <div class="display-5 fw-bold text-primary">@result.Percent%</div>
+                <small class="text-muted">Điểm đạt</small>
+            </div>
+            <div class="col-4 text-center">
+                <div class="display-5 fw-bold text-success">@result.TotalScore</div>
+                <small class="text-muted">/ @result.MaxScore điểm</small>
+            </div>
+            <div class="col-4 text-center">
+                <div class="display-5 fw-bold text-warning">@result.PassScore%</div>
+                <small class="text-muted">Điểm pass</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex justify-content-center gap-3">
+        <a asp-action="Index" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left me-1"></i>Danh sách Quiz
+        </a>
+        @if (result.IsPassed)
+        {
+            <form asp-area="Intern" asp-controller="Certificate"              asp-action="Generate" method="post">
+                <input type="hidden" name="attemptId" value="@result.AttemptId" />
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-award me-1"></i>Nhận chứng chỉ
+                </button>
+            </form>
+        }
+    </div>
+</div>

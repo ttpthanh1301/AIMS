@@ -1,0 +1,93 @@
+@using AIMS.ViewModels.LMS
+@model List<CourseVm>
+@{
+    ViewData["Title"] = "Quản lý Khóa học";
+    var courses = Model ?? new List<CourseVm>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-collection-play text-primary me-2"></i>Khóa học
+    </h5>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Tạo khóa học
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-3">
+    @foreach (var c in courses)
+    {
+        <div class="col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span
+                            class="badge @(c.Level == "BEGINNER" ? "bg-success" : c.Level == "INTERMEDIATE" ? "bg-warning text-dark" : "bg-danger")">
+                            @c.Level
+                        </span>
+                        <span class="badge @(c.IsPublished ? "bg-primary" : "bg-secondary")">
+                            @(c.IsPublished ? "Published" : "Draft")
+                        </span>
+                    </div>
+                    <h6 class="fw-bold">@c.Title</h6>
+                    <p class="text-muted small mb-3">@c.Description</p>
+                    <div class="d-flex gap-3 text-muted small mb-3">
+                        <span><i class="bi bi-collection me-1"></i>@c.TotalChapters chương</span>
+                        <span><i class="bi bi-play-circle me-1"></i>@c.TotalLessons bài</span>
+                        <span><i class="bi bi-people me-1"></i>@c.TotalEnrollments học viên</span>
+                    </div>
+
+                    <div class="d-flex gap-2 mb-2">
+                        <a asp-action="ManageLessons" asp-route-courseId="@c.Id"
+                               class="btn btn-sm btn-outline-primary flex-grow-1">
+                            <i class="bi bi-list-ul me-1"></i>Bài học
+                        </a>
+                        <form asp-action="Publish" method="post" class="d-inline">
+                            <input type="hidden" name="courseId" value="@c.Id" />
+                            <input type="hidden" name="isPublished"                                 value="@(!c.IsPublished ? "true" : "false")" />
+                            <button type="submit"                              class="btn btn-sm @(c.IsPublished ? "btn-outline-secondary" : "btn-success")">
+                                @(c.IsPublished ? "Unpublish" : "Publish")
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <a asp-action="Edit" asp-route-courseId="@c.Id"
+                               class="btn btn-sm btn-outline-secondary flex-grow-1">
+                            <i class="bi bi-pencil me-1"></i>Sửa
+                        </a>
+                        <form asp-action="Delete" method="post" class="d-inline"
+                              onsubmit="return confirm('Xóa khóa học này?')">
+                            <input type="hidden" name="courseId" value="@c.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    @if (!courses.Any())
+    {
+        <div class="col-12 text-center text-muted py-5">
+            <i class="bi bi-collection fs-1"></i>
+            <p class="mt-2">Chưa có khóa học nào.</p>
+        </div>
+    }
+</div>

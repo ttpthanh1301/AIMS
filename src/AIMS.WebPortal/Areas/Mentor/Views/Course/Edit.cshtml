@@ -1,0 +1,65 @@
+@using AIMS.ViewModels.LMS
+@model CourseVm
+@{
+    ViewData["Title"] = "Chỉnh sửa Khóa học";
+}
+
+<div class="d-flex justify-content-between mb-4">
+    <h5 class="fw-bold mb-0">
+        <i class="bi bi-pencil text-primary me-2"></i>Chỉnh sửa Khóa học
+    </h5>
+    <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Quay lại
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:600px">
+    <div class="card-body">
+        <form asp-action="Edit" method="post">
+            <input type="hidden" name="courseId" value="@Model?.Id" />
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Tên khóa học</label>
+                <input name="title" class="form-control"       value="@Model?.Title" required />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Mô tả</label>
+                <textarea name="description" class="form-control"             rows="3">@Model?.Description</textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Cấp độ</label>
+                <select name="level" class="form-select">
+                    @foreach (var lvl in new[] { "BEGINNER", "INTERMEDIATE", "ADVANCED" })
+                    {
+                        if (lvl == Model?.Level)
+                        {
+                            <option value="@lvl" selected>@lvl</option>
+                        }
+                        else
+                        {
+                            <option value="@lvl">@lvl</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="mb-4">
+                <div class="form-check form-switch">
+                    @if (Model?.IsPublished == true)
+                    {
+                        <input class="form-check-input" type="checkbox"      name="isPublished" value="true" checked />
+                    }
+                    else
+                    {
+                        <input class="form-check-input" type="checkbox" name="isPublished" value="true" />
+                    }
+                    <label class="form-check-label fw-semibold">Publish</label>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Lưu thay đổi
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary">Hủy</a>
+            </div>
+        </form>
+    </div>
+</div>
