@@ -1,12 +1,11 @@
 using AIMS.BackendServer.Data;
 using AIMS.BackendServer.Data.Entities;
-using AIMS.ViewModels.LMS;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using AIMS.BackendServer.Extensions;
-
+using AIMS.ViewModels.LMS;
 namespace AIMS.BackendServer.Controllers;
 
 [Route("api/[controller]")]
@@ -174,8 +173,20 @@ public class QuizBanksController : ControllerBase
         if (quiz == null)
             return NotFound(new { message = $"QuizBank #{id} không tồn tại." });
 
+        // ⭐ Kiểm tra đã có học sinh thi chưa
+        var hasAttempts = await _context.UserQuizAttempts
+            .AnyAsync(a => a.QuizBankId == id);
+
+        if (hasAttempts)
+            return BadRequest(new
+            {
+                message = "Không thể xóa Quiz này vì đã có học sinh làm bài. " +
+                          "Hãy đóng Quiz thay vì xóa."
+            });
+
         _context.QuizBanks.Remove(quiz);
         await _context.SaveChangesAsync();
+
         return Ok(new { message = "Đã xóa QuizBank." });
     }
 }

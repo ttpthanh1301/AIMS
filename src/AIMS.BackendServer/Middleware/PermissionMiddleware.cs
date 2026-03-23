@@ -120,27 +120,31 @@ public class PermissionMiddleware
             _ when path.Contains("/api/applications") => "RECRUITMENT_CV",
             _ when path.Contains("/api/screening") => "RECRUITMENT_CV",
 
-            // ── LMS — chỉ check CRUD course/quiz (Mentor) ─────
+            // ── LMS (Mentor tạo/sửa) ──────────────────────────
             _ when path.Contains("/api/courses") => "LMS_COURSES",
             _ when path.Contains("/api/lessons") => "LMS_COURSES",
             _ when path.Contains("/api/quizbanks") => "LMS_QUIZ",
 
-            // ── Task Management ───────────────────────────────
+            // ── Task (Mentor tạo task) ─────────────────────────
             _ when path.Contains("/api/tasks") => "TASKS_BOARD",
-            _ when path.Contains("/api/dailyreports") => "TASKS_REPORT",
-            _ when path.Contains("/api/timesheets") => "TASKS_TIMESHEET",
 
-            // ── Intern actions — đã có [Authorize(Roles)] bảo vệ
-            // → return null để middleware KHÔNG check permission
+            // ── Daily Report (Mentor xem/feedback) ────────────
+            _ when path.Contains("/api/dailyreports") => "TASKS_REPORT",
+
+            // ── Tất cả các endpoint dưới đây dùng [Authorize(Roles)]
+            // trong controller tự xử lý → middleware KHÔNG check thêm
+            _ when path.Contains("/api/timesheets") => null,  // ← SỬA
             _ when path.Contains("/api/enrollments") => null,
             _ when path.Contains("/api/lessonprogress") => null,
             _ when path.Contains("/api/quizattempts") => null,
             _ when path.Contains("/api/certificates") => null,
+            _ when path.Contains("/api/internassignments") => null,
+            _ when path.Contains("/api/internshipperiods") => null,
+            _ when path.Contains("/api/dashboard") => null,
 
             _ => null,
         };
     }
-
     private static bool IsPublicPath(string path) =>
         PublicPaths.Any(p => path.StartsWith(p,
             StringComparison.OrdinalIgnoreCase));
