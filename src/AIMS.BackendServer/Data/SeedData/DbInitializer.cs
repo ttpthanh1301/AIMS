@@ -94,7 +94,6 @@ public static class DbInitializer
             (Email: "mentor@deha.vn", Pass: "Mentor@2025!", Role: "Mentor",
              Id: "mentor-seed-001", First: "Nguyen",  Last: "Van Mentor",
              StudentId: (string?)null, GPA: (decimal?)null),
-
             (Email: "intern@deha.vn", Pass: "Intern@2025!", Role: "Intern",
              Id: "intern-seed-001", First: "Tran",    Last: "Van Intern",
              StudentId: (string?)"SV001", GPA: (decimal?)3.5m),
