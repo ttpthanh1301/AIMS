@@ -14,9 +14,17 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-warning alert-dismissible">
+        <i class="bi bi-exclamation-circle me-2"></i>@ViewBag.Error
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 @{
     ViewData["Title"] = "Quản lý Quiz";
     var quizzes = Model ?? new List<QuizBankVm>();
+    var courses = ViewBag.Courses as List<CourseVm> ?? new();
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -24,46 +32,74 @@
         <i class="bi bi-pencil-square text-primary me-2"></i>Ngân hàng Quiz
     </h5>
     <button class="btn btn-primary" data-bs-toggle="modal"
-            data-bs-target="#createQuizModal">
+            data-bs-target="#createQuizModal" @(courses.Any() ? null : "disabled")>
         <i class="bi bi-plus-lg me-1"></i>Tạo Quiz mới
     </button>
 </div>
 
-<div class="row g-3">
-    @foreach (var q in quizzes)
-    {
-        <div class="col-md-6 col-xl-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <h6 class="fw-bold">@q.Title</h6>
-                    <div class="text-muted small mb-3">@q.CourseTitle</div>
-                    <div class="d-flex gap-3 text-muted small mb-3">
-                        <span><i class="bi bi-question-circle me-1"></i>@q.TotalQuestions câu</span>
-                        <span><i class="bi bi-trophy me-1"></i>Pass: @q.PassScore%</span>
-                        <span><i class="bi bi-arrow-repeat me-1"></i>Max: @q.MaxAttempts lần</span>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <a asp-action="Configure" asp-route-quizId="@q.Id"
-                           class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-gear me-1"></i>Cấu hình câu hỏi
-                        </a>
-                        <a asp-action="Edit" asp-route-quizId="@q.Id"
-                           class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-pencil"></i>
-                        </a>
-                        <form asp-action="Delete" method="post" class="d-inline"
-                              onsubmit="return confirm('Xóa Quiz này? Tất cả câu hỏi sẽ bị xóa!')">
-                            <input type="hidden" name="quizId" value="@q.Id" />
-                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </form>
+@if (!courses.Any())
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-info-circle me-2"></i>Chưa tải được danh sách khóa học. Hãy kiểm tra API khóa học trước khi tạo quiz.
+    </div>
+}
+
+@if (quizzes.Any())
+{
+    <div class="row g-3">
+        @foreach (var q in quizzes)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="fw-bold mb-1">@q.Title</h6>
+                        <div class="text-muted small mb-3">@q.CourseTitle</div>
+                        @if (!string.IsNullOrWhiteSpace(q.LessonTitle))
+                        {
+                            <div class="text-muted small mb-2">
+                                <i class="bi bi-journal-text me-1"></i>@q.LessonTitle
+                            </div>
+                        }
+                        <div class="d-flex flex-wrap gap-3 text-muted small mb-3">
+                            <span><i class="bi bi-question-circle me-1"></i>@q.TotalQuestions câu</span>
+                            <span><i class="bi bi-trophy me-1"></i>Pass: @q.PassScore%</span>
+                            <span><i class="bi bi-arrow-repeat me-1"></i>Max: @q.MaxAttempts lần</span>
+                        </div>
+                        <div class="mt-auto d-flex gap-2">
+                            <a asp-action="Configure" asp-route-quizId="@q.Id"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-gear me-1"></i>Cấu hình câu hỏi
+                            </a>
+                            <a asp-action="Edit" asp-route-quizId="@q.Id"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form asp-action="Delete" method="post" class="d-inline"
+                                  onsubmit="return confirm('Xóa Quiz này? Tất cả câu hỏi sẽ bị xóa!')">
+                                <input type="hidden" name="quizId" value="@q.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body py-5 text-center">
+            <div class="mb-3 text-primary fs-1">
+                <i class="bi bi-journal-richtext"></i>
+            </div>
+            <h5 class="fw-bold">Chưa có quiz nào</h5>
+            <p class="text-muted mb-0">Tạo quiz đầu tiên để bắt đầu thêm câu hỏi cho khóa học hoặc bài học.</p>
         </div>
-    }
-</div>
+    </div>
+}
 
 <!-- Modal tạo Quiz -->
 <div class="modal fade" id="createQuizModal" tabindex="-1">
@@ -79,13 +115,26 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Khóa học</label>
-                        <select name="courseId" class="form-select" required>
+                        <select name="courseId" class="form-select quiz-course-select" required>
                             <option value="">-- Chọn khóa học --</option>
-                            @foreach (var c in ViewBag.Courses as List<CourseVm> ?? new())
+                            @foreach (var c in courses)
                             {
                                 <option value="@c.Id">@c.Title</option>
                             }
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Chương</label>
+                        <select class="form-select quiz-chapter-select" disabled>
+                            <option value="">-- Chọn chương --</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Bài học</label>
+                        <select name="lessonId" class="form-select quiz-lesson-select" disabled>
+                            <option value="">-- Gắn theo khóa học chung --</option>
+                        </select>
+                        <div class="form-text">Có thể bỏ trống nếu quiz áp dụng cho toàn khóa học.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Tên Quiz</label>
@@ -124,3 +173,78 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    document.querySelectorAll('#createQuizModal').forEach(modal => {
+        const courseSelect = modal.querySelector('.quiz-course-select');
+        const chapterSelect = modal.querySelector('.quiz-chapter-select');
+        const lessonSelect = modal.querySelector('.quiz-lesson-select');
+        let chapterData = [];
+
+        courseSelect?.addEventListener('change', () => loadChapters(courseSelect.value));
+        chapterSelect?.addEventListener('change', () => populateLessons(chapterSelect.value));
+
+        async function loadChapters(courseId, selectedChapterId = '', selectedLessonId = '') {
+            chapterSelect.innerHTML = '<option value="">-- Chọn chương --</option>';
+            lessonSelect.innerHTML = '<option value="">-- Gắn theo khóa học chung --</option>';
+            chapterData = [];
+
+            if (!courseId) {
+                chapterSelect.disabled = true;
+                lessonSelect.disabled = true;
+                return;
+            }
+
+            chapterSelect.disabled = true;
+            lessonSelect.disabled = true;
+            try {
+                const response = await fetch(`/Mentor/Quiz/LessonsByCourse?courseId=${courseId}`);
+                chapterData = await response.json();
+
+                chapterData.forEach(chapter => {
+                    const option = document.createElement('option');
+                    option.value = chapter.id;
+                    option.textContent = chapter.label;
+                    if (String(chapter.id) === String(selectedChapterId)) {
+                        option.selected = true;
+                    }
+                    chapterSelect.appendChild(option);
+                });
+
+                chapterSelect.disabled = false;
+                populateLessons(selectedChapterId || chapterSelect.value, selectedLessonId);
+            } catch {
+                chapterSelect.disabled = true;
+            }
+        }
+
+        function populateLessons(chapterId, selectedLessonId = '') {
+            lessonSelect.innerHTML = '<option value="">-- Gắn theo khóa học chung --</option>';
+
+            if (!chapterId) {
+                lessonSelect.disabled = false;
+                return;
+            }
+
+            const chapter = chapterData.find(item => String(item.id) === String(chapterId));
+            if (!chapter) {
+                lessonSelect.disabled = false;
+                return;
+            }
+
+            chapter.lessons.forEach(lesson => {
+                const option = document.createElement('option');
+                option.value = lesson.id;
+                option.textContent = lesson.label;
+                if (String(lesson.id) === String(selectedLessonId)) {
+                    option.selected = true;
+                }
+                lessonSelect.appendChild(option);
+            });
+
+            lessonSelect.disabled = false;
+        }
+    });
+</script>
+}

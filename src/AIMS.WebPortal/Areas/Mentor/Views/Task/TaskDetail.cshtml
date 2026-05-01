@@ -1,0 +1,166 @@
+@using AIMS.ViewModels.TaskManagement
+@model TaskDetailVm
+@{
+    ViewData["Title"] = "Chi tiết task";
+
+    string StatusText(string status) => status switch
+    {
+        "TODO" => "Chưa làm",
+        "IN_PROGRESS" => "Đang làm",
+        "DONE" => "Hoàn thành",
+        "OVERDUE" => "Quá hạn",
+        _ => status
+    };
+
+    string PriorityText(string priority) => priority switch
+    {
+        "HIGH" => "Cao",
+        "MEDIUM" => "Trung bình",
+        "LOW" => "Thấp",
+        _ => priority
+    };
+
+    var statusClass = Model.Status switch
+    {
+        "DONE" => "bg-success-subtle text-success",
+        "IN_PROGRESS" => "bg-primary-subtle text-primary",
+        "OVERDUE" => "bg-danger-subtle text-danger",
+        _ => "bg-secondary-subtle text-secondary"
+    };
+
+    var priorityClass = Model.Priority switch
+    {
+        "HIGH" => "bg-danger-subtle text-danger",
+        "MEDIUM" => "bg-warning-subtle text-warning-emphasis",
+        _ => "bg-info-subtle text-info-emphasis"
+    };
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-task-detail.css" />
+}
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1">
+            <i class="bi bi-card-checklist text-primary me-2"></i>Chi tiết task
+        </h4>
+        <div class="text-muted small">Xem yêu cầu, deadline và lịch sử cập nhật của task đã giao.</div>
+    </div>
+    <div class="task-detail-actions">
+        <a asp-area="Mentor" asp-controller="Task" asp-action="Index" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left me-1"></i>Quay lại Kanban
+        </a>
+        <a asp-area="Mentor" asp-controller="Task" asp-action="EditTask" asp-route-taskId="@Model.Id" class="btn btn-primary">
+            <i class="bi bi-pencil-square me-1"></i>Chỉnh sửa
+        </a>
+        <form asp-area="Mentor" asp-controller="Task" asp-action="DeleteTask" method="post"
+              onsubmit="return confirm('Bạn chắc chắn muốn xóa task này? Toàn bộ lịch sử và timesheet liên quan sẽ bị xóa.');">
+            <input type="hidden" name="taskId" value="@Model.Id" />
+            <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-trash me-1"></i>Xóa
+            </button>
+        </form>
+    </div>
+</div>
+
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div class="task-detail-layout">
+    <section class="task-detail-panel">
+        <div class="panel-body">
+            <div class="task-detail-header">
+                <div>
+                    <h1 class="task-detail-title">@Model.Title</h1>
+                    <div class="task-detail-subtitle">Task #@Model.Id • Giao cho @Model.InternName</div>
+                </div>
+                @if (Model.IsOverdue)
+                {
+                    <span class="badge bg-danger rounded-pill px-3 py-2">Đang quá hạn</span>
+                }
+            </div>
+
+            <div class="task-chip-row">
+                <span class="task-chip @statusClass">@StatusText(Model.Status)</span>
+                <span class="task-chip @priorityClass">Ưu tiên @PriorityText(Model.Priority)</span>
+            </div>
+
+            <div class="mb-4">
+                <div class="fw-semibold mb-2">Mô tả công việc</div>
+                <div class="task-description" data-task-markdown>
+                    @(string.IsNullOrWhiteSpace(Model.Description) ? "Chưa có mô tả chi tiết cho task này." : Model.Description)
+                </div>
+            </div>
+
+            <div class="task-meta-grid">
+                <div class="task-meta-item">
+                    <div class="task-meta-label">Deadline</div>
+                    <div class="task-meta-value">@Model.Deadline.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+                <div class="task-meta-item">
+                    <div class="task-meta-label">Ước tính giờ</div>
+                    <div class="task-meta-value">@(Model.EstimatedHours?.ToString("0.##") ?? "Chưa đặt")</div>
+                </div>
+                <div class="task-meta-item">
+                    <div class="task-meta-label">Ngày tạo</div>
+                    <div class="task-meta-value">@Model.CreateDate.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+                <div class="task-meta-item">
+                    <div class="task-meta-label">Người tạo</div>
+                    <div class="task-meta-value">@Model.CreatedBy</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <aside class="task-detail-panel">
+        <div class="panel-body">
+            <div class="fw-bold mb-3">
+                <i class="bi bi-clock-history text-primary me-2"></i>Lịch sử cập nhật
+            </div>
+
+            @if (Model.Activities.Count == 0)
+            {
+                <div class="text-muted small">Chưa có lịch sử thay đổi cho task này.</div>
+            }
+            else
+            {
+                <div class="task-history">
+                    @foreach (var activity in Model.Activities.OrderByDescending(a => a.ChangedAt))
+                    {
+                        <div class="task-history-item">
+                            <div class="task-history-title">
+                                @if (string.IsNullOrWhiteSpace(activity.FromStatus))
+                                {
+                                    <span>Tạo task sang trạng thái @StatusText(activity.ToStatus)</span>
+                                }
+                                else
+                                {
+                                    <span>@StatusText(activity.FromStatus) → @StatusText(activity.ToStatus)</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(activity.Note))
+                            {
+                                <div class="task-history-note">@activity.Note</div>
+                            }
+                            <div class="task-history-time">
+                                @activity.ChangedBy • @activity.ChangedAt.ToString("dd/MM/yyyy HH:mm")
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </aside>
+</div>
+
+@section Scripts {
+<script src="~/js/task-markdown.js"></script>
+}

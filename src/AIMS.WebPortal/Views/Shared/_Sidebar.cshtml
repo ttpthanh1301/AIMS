@@ -1,29 +1,68 @@
 @using System.Security.Claims
+@using AIMS.ViewModels.TaskManagement
+@using AIMS.WebPortal.Services
+@inject BackendApiClient Api
 
 @{
     var roles = User.Claims
         .Where(c => c.Type == ClaimTypes.Role)
         .Select(c => c.Value).ToList();
     bool isAdmin = roles.Contains("Admin");
-    bool isHR = roles.Contains("HR") || isAdmin;
-    bool isMentor = roles.Contains("Mentor") || isAdmin;
-    bool isIntern = roles.Contains("Intern") || isAdmin;
+    bool isHR = roles.Contains("HR");
+    bool isMentor = roles.Contains("Mentor");
+    bool isIntern = roles.Contains("Intern");
+    var pendingReportCount = 0;
 
     var ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
     var area = ViewContext.RouteData.Values["area"]?.ToString() ?? "";
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+
+    if (isMentor)
+    {
+        var mentorReports = await Api.GetAsync<List<DailyReportVm>>("/api/dailyreports")
+            ?? new List<DailyReportVm>();
+        pendingReportCount = mentorReports.Count(r => !r.HasFeedback);
+    }
 }
 
-<ul class="nav flex-column mt-2 pb-4">
-
-    <li class="nav-item">
-        <a class="nav-link @(ctrl == "Home" && area == "" ? "active" : "")" asp-controller="Home" asp-action="Index"
-               asp-area="">
-            <i class="bi bi-speedometer2 me-2"></i>Dashboard
-        </a>
-    </li>
+<ul class="nav flex-column mt-3 pb-4">
 
     @* ── HR ─────────────────────────────────────── *@
+    @if (isAdmin)
+    {
+        <div class="nav-section">Quản trị</div>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Admin" && ctrl == "Dashboard" ? "active" : "")" asp-area="Admin"
+                   asp-controller="Dashboard" asp-action="Index">
+                <i class="bi bi-grid me-2"></i>Admin Dashboard
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Admin" && ctrl == "User" ? "active" : "")" asp-area="Admin"
+                   asp-controller="User" asp-action="Index">
+                <i class="bi bi-people me-2"></i>Người dùng
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Admin" && ctrl == "InternshipPeriod" ? "active" : "")" asp-area="Admin"
+                   asp-controller="InternshipPeriod" asp-action="Index">
+                <i class="bi bi-calendar-range me-2"></i>Kỳ thực tập
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Admin" && ctrl == "InternAssignment" ? "active" : "")" asp-area="Admin"
+                   asp-controller="InternAssignment" asp-action="Index">
+                <i class="bi bi-diagram-3 me-2"></i>Phân công intern
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Admin" && ctrl == "Role" ? "active" : "")" asp-area="Admin"
+                   asp-controller="Role" asp-action="Index">
+                <i class="bi bi-key me-2"></i>Roles
+            </a>
+        </li>
+    }
+
     @if (isHR)
     {
         <div class="nav-section">Tuyển dụng</div>
@@ -48,7 +87,13 @@
         <li class="nav-item">
             <a class="nav-link @(area == "Mentor" && ctrl == "Course" ? "active" : "")" asp-area="Mentor"
                    asp-controller="Course"    asp-action="Index">
-                <i class="bi bi-collection-play me-2"></i>Khóa học
+                <i class="bi bi-collection-play me-2"></i>Quản lý Khóa học
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(area == "Mentor" && ctrl == "Progress" ? "active" : "")" asp-area="Mentor"
+                   asp-controller="Progress"    asp-action="Courses">
+                <i class="bi bi-graph-up me-2"></i>Tiến độ Intern
             </a>
         </li>
         <li class="nav-item">
@@ -68,13 +113,9 @@
             <a class="nav-link @(area == "Mentor" && ctrl == "Dashboard" && action == "DailyReports" ? "active" : "")"
                    asp-area="Mentor"              asp-controller="Dashboard" asp-action="DailyReports">
                 <i class="bi bi-journal-text me-2"></i>Daily Reports
-                @{
-                    // Badge số report chưa feedback
-                    var pending = ViewBag.PendingCount as int? ?? 0;
-                    if (pending > 0)
-                    {
-                        <span class="badge bg-danger rounded-pill ms-1">@pending</span>
-                    }
+                @if (pendingReportCount > 0)
+                {
+                    <span class="badge bg-danger rounded-pill ms-auto">@pendingReportCount</span>
                 }
             </a>
         </li>
@@ -95,14 +136,6 @@
     @* ── Intern ──────────────────────────────────── *@
     @if (isIntern)
     {
-        <div class="nav-section">Tuyển dụng</div>
-        <li class="nav-item">
-            <a class="nav-link @(area == "Intern" && ctrl == "Apply" ? "active" : "")" asp-area="Intern"
-                   asp-controller="Apply" asp-action="Index">
-                <i class="bi bi-send me-2"></i>Nộp hồ sơ
-            </a>
-        </li>
-
         <div class="nav-section">Học tập</div>
         <li class="nav-item">
             <a class="nav-link @(area == "Intern" && ctrl == "LMS" ? "active" : "")" asp-area="Intern" asp-controller="LMS"
@@ -121,7 +154,7 @@
         <li class="nav-item">
             <a class="nav-link @(area == "Intern" && ctrl == "Task" ? "active" : "")" asp-area="Intern"
                    asp-controller="Task" asp-action="Index">
-                <i class="bi bi-list-task me-2"></i>Tasks của tôi
+                <i class="bi bi-kanban me-2"></i>Kanban Board
             </a>
         </li>
         <li class="nav-item">

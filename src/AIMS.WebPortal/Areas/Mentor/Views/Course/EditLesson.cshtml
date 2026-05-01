@@ -1,0 +1,363 @@
+@using AIMS.ViewModels.LMS
+@model LessonVm
+@{
+    ViewData["Title"] = "Chỉnh sửa Bài học";
+    int courseId = ViewBag.CourseId;
+    var uploadImageUrl = Url.Action("UploadImage", "Course", new { area = "Mentor" }) ?? "/Mentor/Course/UploadImage";
+    var imageUrlsValue = string.Join("\n", Model.ImageUrls ?? new List<string>());
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-course-edit-lesson.css" />
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h5 class="fw-bold mb-1">
+            <i class="bi bi-pencil-square text-primary me-2"></i>Chỉnh sửa Bài học
+        </h5>
+        <div class="text-muted small">@Model.ChapterTitle</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-action="LessonDetails" asp-route-courseId="@courseId" asp-route-lessonId="@Model.Id" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-eye me-1"></i>Chi tiết
+        </a>
+        <a asp-action="ManageLessons" asp-route-courseId="@courseId" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Quay lại
+        </a>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card border-0 shadow-sm lesson-edit-card">
+    <div class="card-body">
+        <form method="post" asp-action="EditLesson" id="lesson-edit-form">
+            <input type="hidden" name="courseId" value="@courseId" />
+            <input type="hidden" name="lessonId" value="@Model.Id" />
+            <input type="hidden" name="imageUrls" id="imageUrls" value="@imageUrlsValue" />
+
+            <div class="row g-3">
+                <div class="col-md-7">
+                    <label class="form-label fw-semibold">Tiêu đề bài học</label>
+                    <input name="title" class="form-control" value="@Model.Title" required />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Thứ tự</label>
+                    <input name="sortOrder" type="number" class="form-control" value="@Model.SortOrder" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Thời lượng</label>
+                    <input name="durationMinutes" type="number" class="form-control" value="@Model.DurationMinutes" />
+                </div>
+            </div>
+
+            <div class="form-check form-switch mt-3">
+                <input type="hidden" name="isRequired" value="false" />
+                @if (Model.IsRequired)
+                {
+                    <input class="form-check-input" type="checkbox" role="switch" id="isRequired" name="isRequired" value="true" checked />
+                }
+                else
+                {
+                    <input class="form-check-input" type="checkbox" role="switch" id="isRequired" name="isRequired" value="true" />
+                }
+                <label class="form-check-label" for="isRequired">Bài học bắt buộc</label>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label fw-semibold">Mô tả / nội dung text</label>
+                <div class="task-editor">
+                    <div class="task-editor-toolbar" aria-label="Thanh công cụ mô tả">
+                        <button type="button" class="btn" data-wrap="" title="Định dạng văn bản">
+                            <span>Aa</span>
+                        </button>
+                        <button type="button" class="btn" data-wrap="bold" title="In đậm">
+                            <i class="bi bi-type-bold"></i>
+                        </button>
+                        <button type="button" class="btn" data-wrap="italic" title="In nghiêng">
+                            <i class="bi bi-type-italic"></i>
+                        </button>
+                        <button type="button" class="btn" data-list="ul" title="Danh sách">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                        <button type="button" class="btn" data-list="ol" title="Danh sách số">
+                            <i class="bi bi-list-ol"></i>
+                        </button>
+                        <button type="button" class="btn" data-insert="> " title="Trích dẫn">
+                            <i class="bi bi-quote"></i>
+                        </button>
+                        <button type="button" class="btn" data-wrap="code" title="Mã nguồn">
+                            <i class="bi bi-code-slash"></i>
+                        </button>
+                        <button type="button" class="btn" data-insert="| Thứ Hai | Thứ Ba | Thứ Tư | Thứ Năm | Thứ Sáu | Thứ Bảy | Chủ Nhật |\n| --- | --- | --- | --- | --- | --- | --- |\n|  |  |  | 1 | 2 | 3 | 4 |\n| 5 | 6 | 7 | 8 | 9 | 10 | 11 |\n| 12 | 13 | 14 | 15 | 16 | 17 | 18 |\n| 19 | 20 | 21 | 22 | 23 | 24 | 25 |\n" title="Bảng">
+                            <i class="bi bi-table"></i>
+                        </button>
+                        <button type="button" class="btn" id="insertLinkBtn" title="Liên kết">
+                            <i class="bi bi-link-45deg"></i>
+                        </button>
+                        <button type="button" class="btn" id="lessonUploadBtn" title="Tải ảnh lên">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                        </button>
+                        <button type="button" class="btn" id="clearDescriptionBtn" title="Xóa mô tả">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        <button type="button" class="btn ms-auto" id="previewBtn" title="Xem trước">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                    <div class="task-editor-body">
+                        <textarea name="description" class="form-control lesson-editor" id="lessonEditor" placeholder="Nhập mô tả, link tài liệu, yêu cầu học tập...">@Model.Description</textarea>
+                        <div id="taskPreview" class="task-preview"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">YouTube URL</label>
+                    <input name="videoUrl" class="form-control" value="@Model.VideoUrl" placeholder="https://www.youtube.com/watch?v=..." />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Google Docs/Slides URL</label>
+                    <input name="slideUrl" class="form-control" value="@Model.SlideUrl" placeholder="https://docs.google.com/presentation/d/..." />
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 mt-4">
+                <input type="file" id="lessonImageInput" class="d-none" accept="image/png,image/jpeg,image/gif,image/webp" />
+                <button type="submit" class="btn btn-primary ms-auto">
+                    <i class="bi bi-check-lg me-1"></i>Lưu thay đổi
+                </button>
+            </div>
+
+            <div id="lessonUploadStatus" class="text-muted small mt-2"></div>
+            <div id="lessonImagePreview" class="lesson-media-list mt-3">
+                @foreach (var image in Model.ImageUrls ?? Enumerable.Empty<string>())
+                {
+                    <div class="lesson-media-chip" data-image-url="@image">
+                        <img src="@image" alt="Lesson image" />
+                        <button type="button" class="btn btn-sm btn-light border remove-image-btn" aria-label="Xóa ảnh">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/task-markdown.js"></script>
+<script>
+    const uploadBtn = document.getElementById('lessonUploadBtn');
+    const fileInput = document.getElementById('lessonImageInput');
+    const imageUrlsInput = document.getElementById('imageUrls');
+    const preview = document.getElementById('lessonImagePreview');
+    const status = document.getElementById('lessonUploadStatus');
+    const editor = document.getElementById('lessonEditor');
+    const previewEl = document.getElementById('taskPreview');
+    const previewBtn = document.getElementById('previewBtn');
+    const form = document.getElementById('lesson-edit-form');
+    const imageUrls = imageUrlsInput.value
+        ? imageUrlsInput.value.split('\n').map(x => x.trim()).filter(Boolean)
+        : [];
+    let previewVisible = false;
+
+    bindRemoveButtons();
+    syncImageUrls();
+    renderPreview();
+
+    document.querySelectorAll('[data-wrap]').forEach(button => {
+        button.addEventListener('click', () => {
+            const mode = button.dataset.wrap;
+            if (!mode) return;
+            const wrappers = {
+                bold: ['**', '**'],
+                italic: ['*', '*'],
+                code: ['`', '`']
+            };
+            wrapSelection(...wrappers[mode]);
+        });
+    });
+
+    document.querySelectorAll('[data-insert]').forEach(button => {
+        button.addEventListener('click', () => insertAtCursor(button.dataset.insert));
+    });
+
+    document.querySelectorAll('[data-list]').forEach(button => {
+        button.addEventListener('click', () => prefixSelectionAsList(button.dataset.list));
+    });
+
+    document.getElementById('insertLinkBtn')?.addEventListener('click', () => {
+        const url = prompt('Nhập URL');
+        if (!url) return;
+        const text = getSelectedText() || 'Link';
+        replaceSelection(`[${text}](${url})`);
+    });
+
+    document.getElementById('clearDescriptionBtn')?.addEventListener('click', () => {
+        editor.value = '';
+        editor.focus();
+        renderPreview();
+    });
+
+    uploadBtn?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        await uploadImage(file);
+        fileInput.value = '';
+    });
+
+    editor?.addEventListener('paste', async event => {
+        const files = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith('image/'));
+        if (!files.length) return;
+
+        event.preventDefault();
+        for (const file of files) {
+            await uploadImage(file);
+        }
+    });
+
+    previewBtn?.addEventListener('click', () => {
+        previewVisible = !previewVisible;
+        previewBtn.classList.toggle('active', previewVisible);
+        editor.style.display = previewVisible ? 'none' : 'block';
+        previewEl.style.display = previewVisible ? 'block' : 'none';
+        renderPreview();
+    });
+
+    editor?.addEventListener('input', renderPreview);
+
+    form?.addEventListener('submit', event => {
+        const description = form.querySelector('[name="description"]').value.trim();
+        const videoUrl = form.querySelector('[name="videoUrl"]').value.trim();
+        const slideUrl = form.querySelector('[name="slideUrl"]').value.trim();
+
+        if (!description && !videoUrl && !slideUrl && imageUrls.length === 0) {
+            event.preventDefault();
+            status.textContent = 'Bài học phải có ít nhất một nội dung: text, video, slide hoặc ảnh.';
+        }
+    });
+
+    async function uploadImage(file) {
+        const formData = new FormData();
+        formData.append('image', file);
+        status.textContent = 'Đang tải ảnh...';
+
+        try {
+            const response = await fetch('@uploadImageUrl', { method: 'POST', body: formData });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'Upload ảnh thất bại');
+
+            imageUrls.push(data.url);
+            syncImageUrls();
+            editor.value += `${editor.value ? '\n' : ''}![${file.name || 'image'}](${data.url})`;
+            renderImage(data.url, file.name || 'Lesson image');
+            status.textContent = 'Đã upload ảnh.';
+        } catch (error) {
+            status.textContent = error.message || 'Upload ảnh thất bại';
+        }
+    }
+
+    function getSelectedText() {
+        return editor.value.substring(editor.selectionStart, editor.selectionEnd);
+    }
+
+    function replaceSelection(text) {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        editor.setRangeText(text, start, end, 'end');
+        editor.focus();
+        renderPreview();
+    }
+
+    function insertAtCursor(text) {
+        replaceSelection(text);
+    }
+
+    function wrapSelection(before, after) {
+        const selected = getSelectedText() || 'nội dung';
+        replaceSelection(`${before}${selected}${after}`);
+    }
+
+    function prefixSelectionAsList(type) {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const selected = editor.value.substring(start, end) || 'Nội dung';
+        const lines = selected.split(/\r?\n/).filter(line => line.trim().length > 0);
+        const formatted = lines
+            .map((line, index) => type === 'ol'
+                ? `${index + 1}. ${line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')}`
+                : `- ${line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')}`)
+            .join('\n');
+
+        editor.setRangeText(formatted, start, end, 'end');
+        editor.focus();
+        renderPreview();
+    }
+
+    function renderImage(url, alt) {
+        const item = document.createElement('div');
+        item.className = 'lesson-media-chip';
+        item.dataset.imageUrl = url;
+        item.innerHTML = `
+            <img src="${url}" alt="${alt}">
+            <button type="button" class="btn btn-sm btn-light border remove-image-btn" aria-label="Xóa ảnh">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+        preview.appendChild(item);
+        bindRemoveButton(item.querySelector('.remove-image-btn'));
+    }
+
+    function bindRemoveButtons() {
+        preview.querySelectorAll('.remove-image-btn').forEach(bindRemoveButton);
+    }
+
+    function bindRemoveButton(button) {
+        button.addEventListener('click', () => {
+            const item = button.closest('[data-image-url]');
+            const url = item?.dataset.imageUrl;
+            if (!url) return;
+
+            const index = imageUrls.indexOf(url);
+            if (index >= 0) imageUrls.splice(index, 1);
+
+            syncImageUrls();
+            removeImageMarkdown(url);
+            item.remove();
+        });
+    }
+
+    function removeImageMarkdown(url) {
+        const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const imagePattern = new RegExp(`(?:^|\\n)!\\[[^\\]]*\\]\\(${escapedUrl}\\)`, 'g');
+        editor.value = editor.value.replace(imagePattern, '').replace(/\n{3,}/g, '\n\n').trim();
+        renderPreview();
+    }
+
+    function syncImageUrls() {
+        imageUrlsInput.value = imageUrls.join('\n');
+    }
+
+    function renderPreview() {
+        if (!previewEl || !window.taskMarkdown) return;
+        previewEl.innerHTML = window.taskMarkdown.render(editor.value || '');
+    }
+</script>
+}

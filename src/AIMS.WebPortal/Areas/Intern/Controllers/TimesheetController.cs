@@ -17,7 +17,8 @@ public class TimesheetController : Controller
     public async Task<IActionResult> Index()
     {
         ViewData["Title"] = "Timesheet";
-        var data = await _api.GetAsync<TimesheetResultVm>("/api/timesheets");
+        var data = await _api.GetAsync<TimesheetResultVm>("/api/timesheets")
+            ?? new TimesheetResultVm();
         var tasks = await _api.GetAsync<List<TaskVm>>("/api/tasks")
             ?? new List<TaskVm>();
         ViewBag.Tasks = tasks;
@@ -28,10 +29,24 @@ public class TimesheetController : Controller
     public async Task<IActionResult> Log(
         int taskId, decimal hoursWorked, string? workNote)
     {
-        var ok = await _api.PostAsync<dynamic>("/api/timesheets",
+        if (taskId <= 0)
+        {
+            TempData["Error"] = "Vui lòng chọn task để log giờ.";
+            return RedirectToAction("Index");
+        }
+
+        if (hoursWorked < 0.5m || hoursWorked > 12m)
+        {
+            TempData["Error"] = "Số giờ làm phải từ 0.5 đến 12 giờ.";
+            return RedirectToAction("Index");
+        }
+
+        var (success, message) = await _api.PostWithMessageAsync("/api/timesheets",
             new { taskId, hoursWorked, workNote });
-        TempData[ok != null ? "Success" : "Error"] =
-            ok != null ? "Log giờ thành công!" : "Lỗi khi log giờ.";
+
+        TempData[success ? "Success" : "Error"] =
+            success ? (message ?? "Log giờ thành công!") : (message ?? "Lỗi khi log giờ.");
+
         return RedirectToAction("Index");
     }
 }

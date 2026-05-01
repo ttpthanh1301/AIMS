@@ -10,19 +10,64 @@ namespace AIMS.WebPortal.Areas.Mentor.Controllers;
 public class QuizController : Controller
 {
     private readonly BackendApiClient _api;
+    private readonly ILogger<QuizController> _logger;
 
-    public QuizController(BackendApiClient api)
-        => _api = api;
+    public QuizController(BackendApiClient api, ILogger<QuizController> logger)
+    {
+        _api = api;
+        _logger = logger;
+    }
 
     public async Task<IActionResult> Index()
     {
         ViewData["Title"] = "Quản lý Quiz";
-        var quizzes = await _api.GetAsync<List<QuizBankVm>>("/api/quizbanks")
-            ?? new List<QuizBankVm>();
-        var courses = await _api.GetAsync<List<CourseVm>>("/api/courses")
-            ?? new List<CourseVm>();
+
+        var (quizzes, quizError) = await _api.GetWithMessageAsync<List<QuizBankVm>>("/api/quizbanks");
+        var (courses, courseError) = await _api.GetWithMessageAsync<List<CourseVm>>("/api/courses");
+
+        if (!string.IsNullOrWhiteSpace(quizError))
+        {
+            _logger.LogWarning("Unable to load quizzes: {Message}", quizError);
+            ViewBag.Error = quizError;
+        }
+
+        if (!string.IsNullOrWhiteSpace(courseError))
+        {
+            _logger.LogWarning("Unable to load courses for quiz page: {Message}", courseError);
+            ViewBag.Error ??= courseError;
+        }
+
         ViewBag.Courses = courses;
-        return View(quizzes);
+        return View(quizzes ?? new List<QuizBankVm>());
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> LessonsByCourse(int courseId)
+    {
+        var course = await _api.GetAsync<CourseVm>($"/api/courses/{courseId}");
+        if (course == null)
+            return Json(Array.Empty<object>());
+
+        var chapters = (course.Chapters ?? new List<ChapterVm>())
+            .OrderBy(ch => ch.SortOrder)
+            .Select(ch => new
+            {
+                id = ch.Id,
+                title = ch.Title,
+                label = $"{ch.SortOrder}. {ch.Title}",
+                lessons = ch.Lessons
+                    .OrderBy(l => l.SortOrder)
+                    .Select(l => new
+                    {
+                        id = l.Id,
+                        title = l.Title,
+                        label = $"{l.SortOrder}. {l.Title}"
+                    })
+                    .ToList()
+            })
+            .ToList();
+
+        return Json(chapters);
     }
 
     public async Task<IActionResult> Configure(int quizId)
@@ -64,7 +109,7 @@ public class QuizController : Controller
             return RedirectToAction("Configure", new { quizId });
         }
 
-        await _api.PostAsync<object>($"/api/quizbanks/{quizId}/questions", new
+        var (success, message) = await _api.PostWithMessageAsync($"/api/quizbanks/{quizId}/questions", new
         {
             quizBankId = quizId,
             questionText,
@@ -74,27 +119,38 @@ public class QuizController : Controller
             options,
         });
 
-        TempData["Success"] = "Thêm câu hỏi thành công!";
+        if (success)
+            TempData["Success"] = message ?? "Thêm câu hỏi thành công!";
+        else
+            TempData["Error"] = message ?? "Không thể thêm câu hỏi.";
+
         return RedirectToAction("Configure", new { quizId });
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(
         int courseId,
+        int? lessonId,
         string title,
         decimal passScore,
         int? timeLimit,
         int maxAttempts)
     {
-        await _api.PostAsync<object>("/api/quizbanks", new
+        var (success, message) = await _api.PostWithMessageAsync("/api/quizbanks", new
         {
             courseId,
+            lessonId,
             title,
             passScore,
             timeLimit,
             maxAttempts,
         });
-        TempData["Success"] = "Tạo Quiz thành công!";
+
+        if (success)
+            TempData["Success"] = message ?? "Tạo Quiz thành công!";
+        else
+            TempData["Error"] = message ?? "Tạo Quiz thất bại.";
+
         return RedirectToAction("Index");
     }
     // Thêm 2 action này vào QuizController
@@ -114,20 +170,27 @@ public class QuizController : Controller
     public async Task<IActionResult> Edit(
         int quizId,
         int courseId,
+        int? lessonId,
         string title,
         decimal passScore,
         int? timeLimit,
         int maxAttempts)
     {
-        await _api.PutAsync($"/api/quizbanks/{quizId}", new
+        var (success, message) = await _api.PutWithMessageAsync($"/api/quizbanks/{quizId}", new
         {
             courseId,
+            lessonId,
             title,
             passScore,
             timeLimit,
             maxAttempts,
         });
-        TempData["Success"] = "Cập nhật Quiz thành công!";
+
+        if (success)
+            TempData["Success"] = message ?? "Cập nhật Quiz thành công!";
+        else
+            TempData["Error"] = message ?? "Không thể cập nhật Quiz.";
+
         return RedirectToAction("Index");
     }
     [HttpPost]

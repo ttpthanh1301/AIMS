@@ -11,23 +11,19 @@ using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using FluentValidation;
 using FluentValidation.AspNetCore;
-
-// Bổ sung các namespace bắt buộc cho OpenAPI
 using Microsoft.OpenApi;
+using Microsoft.AspNetCore.DataProtection;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ── 1. Database ────────────────────────────────────────────
-// ── Database ──────────────────────────────────────────
 builder.Services.AddDbContext<AimsDbContext>(opts =>
     opts.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions =>
         {
-            sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null   // Retry tất cả lỗi transient
-            );
+            // KHÔNG dùng EnableRetryOnFailure ở đây vì chúng ta tự retry bên ngoài.
+            // EnableRetryOnFailure conflict với MigrateAsync trong vòng lặp retry thủ công.
             sqlOptions.CommandTimeout(60);
         }
     )
@@ -36,15 +32,15 @@ builder.Services.AddDbContext<AimsDbContext>(opts =>
 // ── 2. Identity ────────────────────────────────────────────
 builder.Services.AddIdentity<AppUser, AppRole>(opts =>
 {
-    opts.Password.RequireDigit = true;
-    opts.Password.RequiredLength = 6;
+    opts.Password.RequireDigit           = true;
+    opts.Password.RequiredLength         = 6;
     opts.Password.RequireNonAlphanumeric = false;
-    opts.Password.RequireUppercase = false;
+    opts.Password.RequireUppercase       = false;
 })
 .AddEntityFrameworkStores<AimsDbContext>()
 .AddDefaultTokenProviders();
 
-// ── 3. JWT Settings (bind từ appsettings.json) ─────────────
+// ── 3. JWT Settings ────────────────────────────────────────
 var jwtSettings = builder.Configuration
     .GetSection("JwtSettings").Get<JwtSettings>()!;
 builder.Services.AddSingleton(jwtSettings);
@@ -54,63 +50,61 @@ builder.Services
     .AddAuthentication(opts =>
     {
         opts.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        opts.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        opts.DefaultChallengeScheme    = JwtBearerDefaults.AuthenticationScheme;
     })
     .AddJwtBearer(opts =>
     {
         opts.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings.Issuer,
-            ValidAudience = jwtSettings.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(
+            ValidIssuer              = jwtSettings.Issuer,
+            ValidAudience            = jwtSettings.Audience,
+            IssuerSigningKey         = new SymmetricSecurityKey(
                                            Encoding.UTF8.GetBytes(jwtSettings.Key)),
-            ClockSkew = TimeSpan.Zero, // Hết hạn chính xác
-
-            // ⭐ THÊM 2 DÒNG NÀY
-            NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
-            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+            ClockSkew                = TimeSpan.Zero,
+            NameClaimType            = System.Security.Claims.ClaimTypes.NameIdentifier,
+            RoleClaimType            = System.Security.Claims.ClaimTypes.Role,
         };
     });
 
 // ── 5. Authorization ───────────────────────────────────────
 builder.Services.AddAuthorization();
 
-// ── 6. Services ────────────────────────────────────────────
+// ── 6. Application Services ────────────────────────────────
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
+builder.Services.AddSingleton<AIMS.BackendServer.Services.ML.IScreeningModelService, AIMS.BackendServer.Services.ML.ScreeningModelService>();
 builder.Services.AddScoped<IAIScreeningService, AIScreeningService>();
-// Cấu hình static files để serve CV uploads
+builder.Services.AddSingleton<AIMS.BackendServer.Services.ML.IFeatureExporter, AIMS.BackendServer.Services.ML.FeatureExporter>();
+builder.Services.AddSingleton<AIMS.BackendServer.Services.ML.ICsvNormalizer, AIMS.BackendServer.Services.ML.CsvNormalizer>();
+builder.Services.AddHostedService<AIMS.BackendServer.Services.ML.ScreeningAutoRetrainer>();
+builder.Services.AddSingleton<AIMS.BackendServer.Services.ML.IFeatureCsvConverter, AIMS.BackendServer.Services.ML.FeatureCsvConverter>();
 builder.Services.AddDirectoryBrowser();
 
-// ── 7. Controllers + OpenAPI (Scalar) ──────────────────────
+// ── 7. Controllers + OpenAPI ───────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-// Cấu hình OpenAPI với Bearer Token
 builder.Services.AddOpenApi("v1", options =>
 {
     options.AddDocumentTransformer((document, context, ct) =>
     {
         document.Info = new()
         {
-            Title = "AIMS API",
-            Version = "v1",
+            Title       = "AIMS API",
+            Version     = "v1",
             Description = "Hệ thống Quản lý Thực tập sinh Thông minh — DEHA Việt Nam",
         };
 
-        // Thêm Bearer Token security scheme
         document.Components ??= new();
-
-        // Fix: Sử dụng IOpenApiSecurityScheme cho Dictionary để match với .NET 9 OpenApi target type
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
         document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
         {
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
+            Type        = SecuritySchemeType.Http,
+            Scheme      = "bearer",
             BearerFormat = "JWT",
             Description = "Nhập JWT token. VD: eyJhbGci...",
         };
@@ -119,86 +113,178 @@ builder.Services.AddOpenApi("v1", options =>
     });
 });
 
-// FluentValidation
+// ── 8. Validation + Mapper + CORS ─────────────────────────
 builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddAutoMapper(cfg => { }, typeof(Program).Assembly);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(
+        new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "keys")));
 
-// AutoMapper
-builder.Services.AddAutoMapper(typeof(Program).Assembly);
-
-// ── CORS (cho WebPortal gọi API) ───────────────────────────
 builder.Services.AddCors(opts => opts.AddPolicy("AllowWebPortal", policy =>
     policy.WithOrigins("http://localhost:5000", "https://localhost:5000")
-          .AllowAnyHeader().AllowAnyMethod()));
+          .AllowAnyHeader()
+          .AllowAnyMethod()));
 
 // ── Build ──────────────────────────────────────────────────
 var app = builder.Build();
 
-// ── Migration + Seed Data ─────────────────────────────
-using (var scope = app.Services.CreateScope())
-{
-    var sv = scope.ServiceProvider;
-    var logger = sv.GetRequiredService<ILogger<Program>>();
-    var context = sv.GetRequiredService<AimsDbContext>();
-    var userMgr = sv.GetRequiredService<UserManager<AppUser>>();
-    var roleMgr = sv.GetRequiredService<RoleManager<AppRole>>();
+// ── Migration + Seed ───────────────────────────────────────
+await InitializeDatabaseAsync(app);
 
-    // Retry loop — chờ SQL Server tạo xong DB
-    var maxRetries = 10;
-    for (int i = 1; i <= maxRetries; i++)
-    {
-        try
-        {
-            logger.LogInformation("⏳ Attempt {i}/{max}: Migrating database...", i, maxRetries);
-
-            // Tạo database + chạy migration
-            await context.Database.MigrateAsync();
-
-            // Seed data
-            await DbInitializer.SeedAsync(context, userMgr, roleMgr);
-
-            logger.LogInformation("✅ Database ready!");
-            break; // Thành công → thoát loop
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning("⚠️ Attempt {i} failed: {msg}", i, ex.Message);
-
-            if (i == maxRetries)
-            {
-                logger.LogError("❌ Could not initialize database after {max} attempts.", maxRetries);
-                throw;
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(5 * i)); // Tăng dần: 5s, 10s, 15s...
-        }
-    }
-}
-
-// ── Middleware Pipeline ─────────────────────────────────────
+// ── Middleware Pipeline ────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(opts =>
-    {
         opts.WithTitle("AIMS API Reference")
             .WithTheme(ScalarTheme.Moon)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
-            // Fix: Sử dụng các extension method mới để tránh warning CS0618
-            .AddPreferredSecuritySchemes("Bearer");
-    });
+            .AddPreferredSecuritySchemes("Bearer"));
 }
-app.UseStaticFiles();
 
 app.UseCors("AllowWebPortal");
-// Chỉ dùng HTTPS redirect khi KHÔNG chạy trong Docker
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
-app.UseAuthentication();   // ← PHẢI trước UseAuthorization
-app.UseAuthorization();
-// ⭐ Permission Middleware — đặt SAU Authentication
-app.UseMiddleware<AIMS.BackendServer.Middleware.PermissionMiddleware>();
 
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseMiddleware<AIMS.BackendServer.Middleware.PermissionMiddleware>();
 app.MapControllers();
+
 app.Run();
+
+// ═══════════════════════════════════════════════════════════
+// Hàm khởi tạo DB tách riêng — dễ đọc, dễ test
+// ═══════════════════════════════════════════════════════════
+static async Task InitializeDatabaseAsync(WebApplication app)
+{
+    const int MaxRetries    = 10;
+    const int BaseDelaySecs = 5;
+
+    using var scope  = app.Services.CreateScope();
+    var sv           = scope.ServiceProvider;
+    var logger       = sv.GetRequiredService<ILogger<Program>>();
+    var context      = sv.GetRequiredService<AimsDbContext>();
+    var userMgr      = sv.GetRequiredService<UserManager<AppUser>>();
+    var roleMgr      = sv.GetRequiredService<RoleManager<AppRole>>();
+
+    // ── Bước 1: Chờ SQL Server sẵn sàng + chạy Migration ──
+    for (int attempt = 1; attempt <= MaxRetries; attempt++)
+    {
+        try
+        {
+            logger.LogInformation("⏳ [{attempt}/{max}] Connecting & migrating database...",
+                attempt, MaxRetries);
+
+            // Kiểm tra kết nối trước khi migrate
+            await context.Database.OpenConnectionAsync();
+            await context.Database.CloseConnectionAsync();
+
+            // Chạy migration
+            await context.Database.MigrateAsync();
+
+            logger.LogInformation("✅ Migration completed.");
+            break; // Thành công → thoát vòng lặp
+        }
+        catch (Exception ex) when (IsTransientError(ex))
+        {
+            // Lỗi tạm thời (SQL Server chưa start, network...) → retry
+            logger.LogWarning("⚠️ [{attempt}/{max}] Transient error: {msg}", attempt, MaxRetries, ex.Message);
+
+            if (attempt == MaxRetries)
+            {
+                logger.LogError("❌ Cannot connect to database after {max} attempts.", MaxRetries);
+                throw;
+            }
+
+            var delay = TimeSpan.FromSeconds(BaseDelaySecs * attempt);
+            logger.LogInformation("⏱️ Retrying in {delay}s...", delay.TotalSeconds);
+            await Task.Delay(delay);
+        }
+        catch (Exception ex) when (IsPendingModelChanges(ex))
+        {
+            // Model thay đổi chưa có migration → cảnh báo và tiếp tục
+            logger.LogWarning(
+                "⚠️ Pending EF model changes detected. " +
+                "Run: dotnet ef migrations add <Name> && dotnet ef database update");
+            break;
+        }
+        catch (Exception ex)
+        {
+            // Lỗi không phải transient (schema sai, thiếu bảng...) → dừng ngay
+            logger.LogError(ex, "❌ Non-retryable migration error.");
+            throw;
+        }
+    }
+
+    // ── Bước 2: Kiểm tra schema tối thiểu trước khi seed ──
+    // Nếu bảng AppRoles không tồn tại dù migration "up to date",
+    // tức là migration files bị thiếu → báo lỗi rõ ràng thay vì crash mơ hồ.
+    var appRolesExists = await TableExistsAsync(context, "AppRoles");
+    if (!appRolesExists)
+    {
+        logger.LogError(
+            "❌ Table [AppRoles] does not exist after migration. " +
+            "Migration files may be missing or __EFMigrationsHistory is stale. " +
+            "Try: dotnet ef migrations add InitialCreate && dotnet ef database update");
+        throw new InvalidOperationException(
+            "Table [AppRoles] missing after migration. See logs for details.");
+    }
+
+    // ── Bước 3: Seed data (chỉ chạy 1 lần, không retry) ──
+    try
+    {
+        logger.LogInformation("🌱 Seeding data...");
+        await DbInitializer.SeedAsync(context, userMgr, roleMgr);
+        logger.LogInformation("✅ Seed data completed. Database is ready!");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "❌ Seed data failed.");
+        throw;
+    }
+}
+
+// ── Helper: Phân loại lỗi transient ───────────────────────
+static bool IsTransientError(Exception ex)
+{
+    // SqlException với mã lỗi thường gặp khi SQL Server chưa sẵn sàng
+    var sqlEx = FindSqlException(ex);
+    if (sqlEx is null) return false;
+
+    // 53   = Cannot connect (server not started)
+    // -2   = Timeout
+    // 4060 = Cannot open database
+    // 40613 = Database unavailable (Azure)
+    int[] transientCodes = [53, -2, 4060, 40613, 233, 64, 20];
+    return transientCodes.Contains(sqlEx.Number);
+}
+
+static bool IsPendingModelChanges(Exception ex) =>
+    ex.Message?.Contains("pending changes",         StringComparison.OrdinalIgnoreCase) == true ||
+    ex.Message?.Contains("PendingModelChangesWarning", StringComparison.OrdinalIgnoreCase) == true;
+
+static Microsoft.Data.SqlClient.SqlException? FindSqlException(Exception ex)
+{
+    var current = ex;
+    while (current is not null)
+    {
+        if (current is Microsoft.Data.SqlClient.SqlException sqlEx)
+            return sqlEx;
+        current = current.InnerException;
+    }
+    return null;
+}
+
+// ── Helper: Kiểm tra bảng tồn tại trong DB ────────────────
+static async Task<bool> TableExistsAsync(AimsDbContext context, string tableName)
+{
+    var conn = context.Database.GetDbConnection();
+    await conn.OpenAsync();
+    await using var cmd = conn.CreateCommand();
+    cmd.CommandText = $"SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{tableName}'";
+    var result = await cmd.ExecuteScalarAsync();
+    await conn.CloseAsync();
+    return Convert.ToInt32(result) > 0;
+}

@@ -1,8 +1,8 @@
+using AIMS.ViewModels.TaskManagement;
+using AIMS.WebPortal.Models;
 using AIMS.WebPortal.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using AIMS.ViewModels.TaskManagement;
-
 
 namespace AIMS.WebPortal.Areas.Intern.Controllers;
 
@@ -15,19 +15,60 @@ public class TaskController : Controller
     public TaskController(BackendApiClient api)
         => _api = api;
 
-
-public async Task<IActionResult> Index()
-{
-    ViewData["Title"] = "Tasks của tôi";
-    var tasks = await _api.GetAsync<List<TaskVm>>("/api/tasks")
-        ?? new List<TaskVm>();
-    return View(tasks);
-}
-
-[HttpPost]
-    public async Task<IActionResult> UpdateStatus(int id, string status)
+    public async Task<IActionResult> Index()
     {
-        await _api.PutAsync($"/api/tasks/{id}/status", new { status });
-        return RedirectToAction("Index");
+        ViewData["Title"] = "Kanban Board";
+        var tasks = await _api.GetAsync<List<TaskVm>>("/api/tasks")
+            ?? new List<TaskVm>();
+        return View(tasks);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(int id)
+    {
+        if (id <= 0)
+            return RedirectToAction(nameof(Index));
+
+        var task = await _api.GetAsync<TaskDetailVm>($"/api/tasks/{id}");
+        if (task == null)
+        {
+            TempData["Error"] = "Không tìm thấy task hoặc bạn không có quyền xem.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        ViewData["Title"] = "Chi tiết task";
+        return View(task);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateStatus([FromBody] KanbanStatusUpdateRequest request)
+    {
+        if (request.Id <= 0 || string.IsNullOrEmpty(request.Status))
+            return BadRequest(new { message = "Dữ liệu không hợp lệ" });
+
+        try
+        {
+            var response = await _api.PutAsync(
+                $"/api/tasks/{request.Id}/status",
+                new
+                {
+                    status = request.Status.ToUpper(),
+                    note = request.Note ?? "Cập nhật từ Kanban board"
+                });
+
+            if (!response)
+                return BadRequest(new { message = "Cập nhật thất bại" });
+
+            return Ok(new
+            {
+                success = true,
+                message = "Cập nhật trạng thái thành công",
+                newStatus = request.Status.ToUpper()
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Lỗi: {ex.Message}" });
+        }
     }
 }

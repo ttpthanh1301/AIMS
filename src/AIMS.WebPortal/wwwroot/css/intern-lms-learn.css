@@ -1,0 +1,150 @@
+.learn-stage {
+    min-height: 420px;
+    background: #fff;
+}
+
+.learn-enrollment-progress {
+    height: 10px;
+}
+
+.learn-lesson-nav {
+    max-height: 640px;
+    overflow-y: auto;
+}
+
+.learn-stage-empty {
+    min-height: 420px;
+    display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #6c757d;
+        padding: 2rem;
+    }
+
+    .learn-markdown {
+        color: #27313b;
+        line-height: 1.65;
+        overflow-wrap: anywhere;
+    }
+
+    .learn-markdown img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        border-radius: 6px;
+        border: 1px solid #e5e7eb;
+        margin: .75rem 0;
+    }
+
+    .learn-markdown ul {
+        list-style: disc;
+        padding-left: 1.5rem;
+        margin: .75rem 0;
+    }
+
+    .learn-markdown ol {
+        list-style: decimal;
+        padding-left: 1.5rem;
+        margin: .75rem 0;
+    }
+
+    .learn-markdown li {
+        margin: .2rem 0;
+    }
+
+    .learn-markdown blockquote {
+        border-left: 4px solid #b6d4fe;
+        color: #43566a;
+        margin: .75rem 0;
+        padding: .35rem .75rem;
+        background: #eef6ff;
+    }
+
+    .learn-markdown code {
+        background: #e9ecef;
+        border-radius: 4px;
+        padding: .12rem .3rem;
+    }
+
+    .learn-stage-frame iframe,
+    .learn-stage-frame video {
+        width: 100%;
+        min-height: 420px;
+        border: 1px solid #d9dde3;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .learn-stage-images {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: .75rem;
+    }
+
+    .learn-stage-images img {
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+        border: 1px solid #d9dde3;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .lesson-nav-item {
+        cursor: pointer;
+        transition: background-color .15s ease;
+    }
+
+    .lesson-nav-item:hover {
+        background: #f8f9fa;
+    }
+
+    .lesson-nav-item.active {
+        background: #eef4ff;
+        border-left: 3px solid #0d6efd;
+    }
+
+    .lesson-nav-item.active .lesson-nav-title {
+        color: #0d6efd;
+    }
+
+    .learn-quiz-card {
+        border: 1px solid #d9dde3;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #fff;
+    }
+
+    .task-markdown-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        margin: .75rem 0;
+    }
+
+    .task-markdown-table {
+        border-collapse: collapse;
+        table-layout: fixed;
+        min-width: 720px;
+        width: max-content;
+        background: #fff;
+        color: #26323f;
+        font-size: .95rem;
+    }
+
+    .task-markdown-table th,
+    .task-markdown-table td {
+        border: 1px solid #d9dde3;
+        min-width: 110px;
+        height: 42px;
+        padding: .45rem .55rem;
+        vertical-align: top;
+        text-align: left;
+        white-space: pre-wrap;
+    }
+
+    .task-markdown-table th {
+        background: #f7f9fb;
+        font-weight: 700;
+        text-align: center;
+    }

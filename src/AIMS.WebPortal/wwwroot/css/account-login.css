@@ -1,0 +1,165 @@
+        :root {
+            --brand-blue: #1f7cc0;
+            --brand-blue-deep: #145f98;
+            --brand-green: #8ec740;
+            --brand-green-deep: #78b02f;
+            --brand-ink: #17324d;
+        }
+        body {
+            background: linear-gradient(135deg, #145f98 0%, #1f7cc0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 1rem;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 440px;
+        }
+
+        .card {
+            border-radius: 20px;
+            box-shadow: 0 24px 64px rgba(20, 95, 152, .4);
+            border: none;
+            overflow: hidden;
+        }
+
+        .card-header-custom {
+            background: linear-gradient(180deg, var(--brand-blue) 0%, var(--brand-blue-deep) 100%);
+            padding: 2rem 2.5rem 1.5rem;
+            text-align: center;
+            border-bottom: 4px solid var(--brand-green);
+        }
+
+        .brand-logo-wrapper {
+            display: inline-flex;
+            width: 88px;
+            height: 88px;
+            padding: 0.75rem;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 100%);
+            box-shadow: 0 12px 32px rgba(10, 45, 74, .2);
+            margin-bottom: 1rem;
+        }
+
+        .brand-logo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .brand-title {
+            color: #ffffff;
+            font-size: 1.75rem;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            margin: 0;
+        }
+
+        .brand-subtitle {
+            color: rgba(255, 255, 255, .88);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: 0.35rem;
+        }
+
+        .card-body-custom {
+            padding: 2.5rem 2.5rem 2rem;
+            background: #ffffff;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--brand-ink);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .input-group {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(31, 124, 192, .2);
+            transition: all 0.3s;
+        }
+
+        .input-group:focus-within {
+            border-color: var(--brand-green);
+            box-shadow: 0 0 0 3px rgba(142, 199, 64, .15);
+        }
+
+        .input-group-text {
+            background: #f8fbfd;
+            border: none;
+            color: var(--brand-blue);
+            padding: 0.75rem 1rem;
+        }
+
+        .form-control {
+            border: none;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            color: var(--brand-ink);
+        }
+
+        .form-control:focus {
+            box-shadow: none;
+            outline: none;
+        }
+
+        .password-toggle {
+            background: transparent;
+            border: none;
+            color: var(--brand-blue);
+            cursor: pointer;
+            padding: 0.75rem 1rem;
+            transition: all 0.2s;
+        }
+
+        .password-toggle:hover {
+            color: var(--brand-green);
+        }
+
+        .btn-login {
+            background: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-green-deep) 100%);
+            border: none;
+            color: #ffffff;
+            font-weight: 700;
+            padding: 0.85rem 1.5rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            box-shadow: 0 8px 24px rgba(142, 199, 64, .3);
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(142, 199, 64, .4);
+            background: linear-gradient(135deg, var(--brand-green-deep) 0%, var(--brand-green) 100%);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .alert {
+            border-radius: 12px;
+            border: none;
+            font-size: 0.9rem;
+        }
+
+        .alert-danger {
+            background: rgba(220, 53, 69, .1);
+            color: #c82333;
+        }
+
+        @media (max-width: 576px) {
+            .card-header-custom,
+            .card-body-custom {
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
+            }
+        }
+    

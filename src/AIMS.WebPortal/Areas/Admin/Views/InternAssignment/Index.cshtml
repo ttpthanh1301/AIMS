@@ -1,0 +1,198 @@
+@model AdminAssignmentIndexVm
+
+@section Styles {
+<link rel="stylesheet" href="~/css/admin-intern-assignment.css" />
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Phân công intern</h3>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="row g-3">
+    <div class="assignment-form-col">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="fw-bold mb-3">Tạo phân công</h5>
+
+                @if (Model.Interns.Count == 0 || Model.Mentors.Count == 0 || Model.Periods.Count == 0)
+                {
+                    <div class="alert alert-warning mb-0">
+                        Cần có intern, mentor và kỳ thực tập trước khi phân công.
+                    </div>
+                }
+                else
+                {
+                    <form asp-action="Create" method="post" class="row g-3">
+                        @Html.AntiForgeryToken()
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Kỳ thực tập</label>
+                            <select class="form-select form-select-sm" name="PeriodId" required>
+                                @foreach (var period in Model.Periods)
+                                {
+                                    <option value="@period.Id" selected="@(Model.PeriodId == period.Id)">
+                                        @period.Name
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Intern</label>
+                            <select class="form-select form-select-sm" name="InternUserId" required>
+                                <option value="">Chọn intern</option>
+                                @foreach (var intern in Model.Interns)
+                                {
+                                    <option value="@intern.Id">@intern.FullName - @intern.Email</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Mentor</label>
+                            <select class="form-select form-select-sm" name="MentorUserId" required>
+                                <option value="">Chọn mentor</option>
+                                @foreach (var mentor in Model.Mentors)
+                                {
+                                    <option value="@mentor.Id">@mentor.FullName - @mentor.Email</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <button class="btn btn-primary btn-sm w-100" type="submit">
+                                <i class="bi bi-diagram-3 me-2"></i>Phân công ngay
+                            </button>
+                        </div>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="assignment-list-col">
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="get" class="row g-2 align-items-end">
+                    <div class="col-md-9">
+                        <label class="form-label fw-semibold">Lọc theo kỳ thực tập</label>
+                        <select class="form-select form-select-sm" name="periodId">
+                            <option value="">Tất cả kỳ thực tập</option>
+                            @foreach (var period in Model.Periods)
+                            {
+                                <option value="@period.Id" selected="@(Model.PeriodId == period.Id)">
+                                    @period.Name
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-primary btn-sm w-100" type="submit">
+                            <i class="bi bi-funnel me-1"></i>Áp dụng
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive-xl">
+                    <table class="table assignment-table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="col-intern">Intern</th>
+                                <th class="col-mentor">Mentor</th>
+                                <th class="col-period">Kỳ thực tập</th>
+                                <th class="col-progress">Tiến độ</th>
+                                <th class="col-date">Ngày phân công</th>
+                                <th class="col-action">Xóa</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                        @if (Model.Assignments.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-5">
+                                    Không có phân công nào.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in Model.Assignments)
+                            {
+                                var completion = item.TotalTasks == 0 ? 0 : item.DoneTasks * 100 / item.TotalTasks;
+                                var completionWidthClass = $"w-pct-{Math.Clamp(completion, 0, 100)}";
+
+                                <tr>
+                                    <td>
+                                        <span class="fw-semibold text-ellipsis" title="@item.InternName">
+                                            @item.InternName
+                                        </span>
+                                        <span class="small text-muted text-ellipsis" title="@item.InternEmail">
+                                            @item.InternEmail
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-center">
+                                        <span class="text-ellipsis" title="@item.MentorName">
+                                            @item.MentorName
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-center">
+                                        <span class="badge bg-primary rounded-pill" title="@item.PeriodName">
+                                            @item.PeriodName
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-center">
+                                        <div class="progress-wrap">
+                                            <div class="small text-muted mb-1">
+                                                @item.DoneTasks/@item.TotalTasks task
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-success @completionWidthClass"></div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td class="cell-center">
+                                        @item.AssignedDate.ToString("dd/MM/yyyy")
+                                    </td>
+
+                                    <td class="cell-actions">
+                                        <form asp-action="Delete" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <input type="hidden" name="periodId" value="@Model.PeriodId" />
+                                            <button class="btn btn-sm btn-outline-danger" type="submit"
+                                                    onclick="return confirm('Hủy phân công này?')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

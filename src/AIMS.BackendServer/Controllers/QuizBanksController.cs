@@ -14,36 +14,40 @@ namespace AIMS.BackendServer.Controllers;
 public class QuizBanksController : ControllerBase
 {
     private readonly AimsDbContext _context;
+    private readonly ILogger<QuizBanksController> _logger;
 
-    public QuizBanksController(AimsDbContext context)
-        => _context = context;
+    public QuizBanksController(AimsDbContext context, ILogger<QuizBanksController> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
 
     // GET /api/quizbanks?courseId=1
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int? courseId = null)
     {
-        var query = _context.QuizBanks
-            .Include(q => q.Course)
-            .Include(q => q.CreatedByUser)
-            .Include(q => q.Questions)
-            .AsQueryable();
+        var query = _context.QuizBanks.AsNoTracking().AsQueryable();
 
         if (courseId.HasValue)
             query = query.Where(q => q.CourseId == courseId.Value);
 
         var result = await query
+            .OrderByDescending(q => q.Id)
             .Select(q => new QuizBankVm
             {
                 Id = q.Id,
                 CourseId = q.CourseId,
-                CourseTitle = q.Course.Title,
+                CourseTitle = q.Course != null ? q.Course.Title : string.Empty,
+                LessonId = q.LessonId,
+                LessonTitle = q.Lesson != null ? q.Lesson.Title : null,
                 Title = q.Title,
                 PassScore = q.PassScore,
                 TimeLimit = q.TimeLimit,
                 MaxAttempts = q.MaxAttempts,
                 TotalQuestions = q.Questions.Count,
-                CreatedByUser = q.CreatedByUser.FirstName + " " +
-                                 q.CreatedByUser.LastName,
+                CreatedByUser = q.CreatedByUser != null
+                    ? (q.CreatedByUser.FirstName + " " + q.CreatedByUser.LastName).Trim()
+                    : string.Empty,
             })
             .ToListAsync();
 
@@ -56,6 +60,7 @@ public class QuizBanksController : ControllerBase
     {
         var quiz = await _context.QuizBanks
             .Include(q => q.Course)
+            .Include(q => q.Lesson)
             .Include(q => q.CreatedByUser)
             .Include(q => q.Questions.OrderBy(qq => qq.SortOrder))
                 .ThenInclude(qq => qq.Options.OrderBy(o => o.SortOrder))
@@ -69,6 +74,8 @@ public class QuizBanksController : ControllerBase
             Id = quiz.Id,
             CourseId = quiz.CourseId,
             CourseTitle = quiz.Course.Title,
+            LessonId = quiz.LessonId,
+            LessonTitle = quiz.Lesson?.Title,
             Title = quiz.Title,
             PassScore = quiz.PassScore,
             TimeLimit = quiz.TimeLimit,
@@ -104,15 +111,44 @@ public class QuizBanksController : ControllerBase
     {
         var userId = User.GetUserId();
 
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { message = "Không xác định được người dùng hiện tại." });
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(new { message = "Tên quiz không được để trống." });
+
+        if (request.PassScore < 0 || request.PassScore > 100)
+            return BadRequest(new { message = "Điểm pass phải nằm trong khoảng 0 đến 100." });
+
+        if (request.MaxAttempts < 1)
+            return BadRequest(new { message = "Số lần thi tối đa phải lớn hơn 0." });
+
         var courseExists = await _context.Courses
             .AnyAsync(c => c.Id == request.CourseId);
         if (!courseExists)
             return NotFound(new { message = $"Course #{request.CourseId} không tồn tại." });
 
+        if (request.LessonId.HasValue)
+        {
+            var lessonExists = await _context.Lessons
+                .Include(l => l.Chapter)
+                .AnyAsync(l => l.Id == request.LessonId.Value && l.Chapter.CourseId == request.CourseId);
+            if (!lessonExists)
+                return BadRequest(new { message = "Bài học không thuộc khóa học đã chọn." });
+        }
+
+        var duplicateQuiz = await _context.QuizBanks.AnyAsync(q =>
+            q.CourseId == request.CourseId &&
+            q.LessonId == request.LessonId &&
+            q.Title.ToLower() == request.Title.Trim().ToLower());
+        if (duplicateQuiz)
+            return BadRequest(new { message = "Quiz này đã tồn tại trong khóa học hoặc bài học đã chọn." });
+
         var quiz = new QuizBank
         {
             CourseId = request.CourseId,
-            Title = request.Title,
+            LessonId = request.LessonId,
+            Title = request.Title.Trim(),
             PassScore = request.PassScore,
             TimeLimit = request.TimeLimit,
             MaxAttempts = request.MaxAttempts,
@@ -126,6 +162,57 @@ public class QuizBanksController : ControllerBase
             new { quiz.Id, quiz.Title, quiz.PassScore });
     }
 
+    // PUT /api/quizbanks/{id}
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,Mentor")]
+    public async Task<IActionResult> Update(
+        int id, [FromBody] UpdateQuizBankRequest request)
+    {
+        var quiz = await _context.QuizBanks.FindAsync(id);
+        if (quiz == null)
+            return NotFound(new { message = $"QuizBank #{id} không tồn tại." });
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(new { message = "Tên quiz không được để trống." });
+
+        if (request.PassScore < 0 || request.PassScore > 100)
+            return BadRequest(new { message = "Điểm pass phải nằm trong khoảng 0 đến 100." });
+
+        if (request.MaxAttempts < 1)
+            return BadRequest(new { message = "Số lần thi tối đa phải lớn hơn 0." });
+
+        var courseExists = await _context.Courses.AnyAsync(c => c.Id == request.CourseId);
+        if (!courseExists)
+            return NotFound(new { message = $"Course #{request.CourseId} không tồn tại." });
+
+        if (request.LessonId.HasValue)
+        {
+            var lessonExists = await _context.Lessons
+                .Include(l => l.Chapter)
+                .AnyAsync(l => l.Id == request.LessonId.Value && l.Chapter.CourseId == request.CourseId);
+            if (!lessonExists)
+                return BadRequest(new { message = "Bài học không thuộc khóa học đã chọn." });
+        }
+
+        var duplicateQuiz = await _context.QuizBanks.AnyAsync(q =>
+            q.Id != id &&
+            q.CourseId == request.CourseId &&
+            q.LessonId == request.LessonId &&
+            q.Title.ToLower() == request.Title.Trim().ToLower());
+        if (duplicateQuiz)
+            return BadRequest(new { message = "Đã có quiz khác cùng tên trong khóa học hoặc bài học đã chọn." });
+
+        quiz.CourseId = request.CourseId;
+        quiz.LessonId = request.LessonId;
+        quiz.Title = request.Title.Trim();
+        quiz.PassScore = request.PassScore;
+        quiz.TimeLimit = request.TimeLimit;
+        quiz.MaxAttempts = request.MaxAttempts;
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Cập nhật Quiz thành công." });
+    }
+
     // POST /api/quizbanks/{id}/questions  — Thêm câu hỏi + options
     [HttpPost("{id}/questions")]
     [Authorize(Roles = "Admin,Mentor")]
@@ -136,23 +223,44 @@ public class QuizBanksController : ControllerBase
         if (!quizExists)
             return NotFound(new { message = $"QuizBank #{id} không tồn tại." });
 
-        // Validate: phải có ít nhất 1 đáp án đúng
-        if (!request.Options.Any(o => o.IsCorrect))
+        if (string.IsNullOrWhiteSpace(request.QuestionText))
+            return BadRequest(new { message = "Nội dung câu hỏi không được để trống." });
+
+        request.QuestionType = request.QuestionType?.Trim().ToUpperInvariant() ?? "SINGLE";
+
+        if (request.QuestionType is not ("SINGLE" or "MULTIPLE" or "TEXT"))
+            return BadRequest(new { message = "Loại câu hỏi không hợp lệ." });
+
+        if (request.Score <= 0)
+            return BadRequest(new { message = "Điểm của câu hỏi phải lớn hơn 0." });
+
+        var options = request.Options
+            .Where(o => !string.IsNullOrWhiteSpace(o.OptionText))
+            .Select((o, index) => new QuestionOption
+            {
+                OptionText = o.OptionText.Trim(),
+                IsCorrect = o.IsCorrect,
+                SortOrder = index + 1,
+            })
+            .ToList();
+
+        if (request.QuestionType != "TEXT" && options.Count < 2)
+            return BadRequest(new { message = "Câu hỏi trắc nghiệm phải có ít nhất 2 đáp án." });
+
+        if (request.QuestionType != "TEXT" && !options.Any(o => o.IsCorrect))
             return BadRequest(new { message = "Phải có ít nhất 1 đáp án đúng." });
+
+        if (request.QuestionType == "SINGLE" && options.Count(o => o.IsCorrect) != 1)
+            return BadRequest(new { message = "Câu hỏi single choice phải có đúng 1 đáp án đúng." });
 
         var question = new QuizQuestion
         {
             QuizBankId = id,
-            QuestionText = request.QuestionText,
-            QuestionType = request.QuestionType.ToUpper(),
+            QuestionText = request.QuestionText.Trim(),
+            QuestionType = request.QuestionType,
             Score = request.Score,
             SortOrder = request.SortOrder,
-            Options = request.Options.Select(o => new QuestionOption
-            {
-                OptionText = o.OptionText,
-                IsCorrect = o.IsCorrect,
-                SortOrder = o.SortOrder,
-            }).ToList(),
+            Options = options,
         };
 
         _context.QuizQuestions.Add(question);

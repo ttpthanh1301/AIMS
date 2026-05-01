@@ -38,13 +38,22 @@ public class LMSController : Controller
     {
         ViewData["Title"] = "Học bài";
         var course = await _api.GetAsync<CourseVm>($"/api/courses/{courseId}");
+        if (course == null)
+        {
+            TempData["Error"] = "Khóa học không tồn tại.";
+            return RedirectToAction("Index");
+        }
+
         var enrollments = await _api.GetAsync<List<EnrollmentVm>>("/api/enrollments");
+        var courseQuizzes = await _api.GetAsync<List<QuizBankVm>>($"/api/quizbanks?courseId={courseId}")
+            ?? new List<QuizBankVm>();
 
         // ⭐ Typed → không còn JsonElement
         var enrollment = enrollments?
             .FirstOrDefault(e => e.CourseId == courseId);
 
         ViewBag.Enrollment = enrollment;
+        ViewBag.CourseQuizzes = courseQuizzes;
         return View(course);
     }
 

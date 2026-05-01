@@ -1,0 +1,130 @@
+@model AdminUserEditVm
+
+@section Styles {
+<link rel="stylesheet" href="~/css/admin-user-edit.css" />
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Cập nhật người dùng</h3>
+        <div class="text-muted">@Model.Email</div>
+    </div>
+    <a class="btn btn-outline-primary" asp-action="Index">
+        <i class="bi bi-arrow-left me-2"></i>Quay lại
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-md-6">
+                <label asp-for="FirstName" class="form-label fw-semibold">Tên</label>
+                <input asp-for="FirstName" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="LastName" class="form-label fw-semibold">Họ</label>
+                <input asp-for="LastName" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="PhoneNumber" class="form-label fw-semibold">Số điện thoại</label>
+                <input asp-for="PhoneNumber" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Avatar" class="form-label fw-semibold">Avatar URL</label>
+                <input asp-for="Avatar" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="SelectedRole" class="form-label fw-semibold">Role</label>
+                <select asp-for="SelectedRole" class="form-select" id="role-select">
+                    @foreach (var role in Model.AvailableRoles)
+                    {
+                        <option value="@role">@role</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                    <input asp-for="IsActive" class="form-check-input" />
+                    <label asp-for="IsActive" class="form-check-label">Đang hoạt động</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="Admin">
+                            <div class="fw-semibold mb-1">Admin</div>
+                            <div class="small text-muted">Quản trị hệ thống và cấu hình vận hành.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="HR">
+                            <div class="fw-semibold mb-1">HR</div>
+                            <div class="small text-muted">Quản lý quy trình tuyển dụng và ứng viên.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="Mentor">
+                            <div class="fw-semibold mb-1">Mentor</div>
+                            <div class="small text-muted">Theo dõi đào tạo, task và tiến độ intern.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="Intern">
+                            <div class="fw-semibold mb-1">Intern</div>
+                            <div class="small text-muted">Bổ sung thêm thông tin học tập để quản lý hồ sơ.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="role-specific" data-role-section="Intern">
+                <div class="col-md-6">
+                    <label asp-for="StudentId" class="form-label fw-semibold">Mã sinh viên</label>
+                    <input asp-for="StudentId" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="GPA" class="form-label fw-semibold">GPA</label>
+                    <input asp-for="GPA" class="form-control" step="0.1" min="0" max="4" />
+                </div>
+            </div>
+            <div class="col-12 d-flex justify-content-end gap-2 mt-3">
+                <a class="btn btn-outline-primary" asp-action="Index">Hủy</a>
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-save me-2"></i>Lưu thay đổi
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const roleSelect = document.getElementById('role-select');
+        const roleSections = document.querySelectorAll('[data-role-section]');
+        const roleCards = document.querySelectorAll('[data-role-card]');
+        const studentIdInput = document.getElementById('StudentId');
+        const gpaInput = document.getElementById('GPA');
+
+        function syncRoleForm() {
+            const role = roleSelect?.value || 'Intern';
+
+            roleSections.forEach(section => {
+                section.classList.toggle('show', section.dataset.roleSection === role);
+            });
+
+            roleCards.forEach(card => {
+                card.classList.toggle('active', card.dataset.roleCard === role);
+            });
+
+            if (role !== 'Intern') {
+                if (studentIdInput) studentIdInput.value = '';
+                if (gpaInput) gpaInput.value = '';
+            }
+        }
+
+        roleSelect?.addEventListener('change', syncRoleForm);
+        syncRoleForm();
+    </script>
+}

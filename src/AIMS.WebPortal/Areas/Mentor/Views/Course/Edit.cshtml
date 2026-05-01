@@ -2,6 +2,11 @@
 @model CourseVm
 @{
     ViewData["Title"] = "Chỉnh sửa Khóa học";
+    var uploadImageUrl = Url.Action("UploadImage", "Course", new { area = "Mentor" }) ?? "/Mentor/Course/UploadImage";
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-course-edit.css" />
 }
 
 <div class="d-flex justify-content-between mb-4">
@@ -13,48 +18,61 @@
     </a>
 </div>
 
-<div class="card border-0 shadow-sm" style="max-width:600px">
+<div class="card border-0 shadow-sm mentor-course-edit-card">
     <div class="card-body">
         <form asp-action="Edit" method="post">
             <input type="hidden" name="courseId" value="@Model?.Id" />
+            <input id="thumbnailUrl" type="hidden" name="thumbnailUrl" value="@Model?.ThumbnailUrl" />
+
             <div class="mb-3">
                 <label class="form-label fw-semibold">Tên khóa học</label>
-                <input name="title" class="form-control"       value="@Model?.Title" required />
+                <input name="title" class="form-control" value="@Model?.Title" required />
             </div>
+
             <div class="mb-3">
                 <label class="form-label fw-semibold">Mô tả</label>
-                <textarea name="description" class="form-control"             rows="3">@Model?.Description</textarea>
+                <textarea name="description" class="form-control" rows="4">@Model?.Description</textarea>
             </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Cấp độ</label>
-                <select name="level" class="form-select">
-                    @foreach (var lvl in new[] { "BEGINNER", "INTERMEDIATE", "ADVANCED" })
-                    {
-                        if (lvl == Model?.Level)
-                        {
-                            <option value="@lvl" selected>@lvl</option>
-                        }
-                        else
-                        {
-                            <option value="@lvl">@lvl</option>
-                        }
-                    }
-                </select>
-            </div>
-            <div class="mb-4">
-                <div class="form-check form-switch">
-                    @if (Model?.IsPublished == true)
-                    {
-                        <input class="form-check-input" type="checkbox"      name="isPublished" value="true" checked />
-                    }
-                    else
-                    {
-                        <input class="form-check-input" type="checkbox" name="isPublished" value="true" />
-                    }
-                    <label class="form-check-label fw-semibold">Publish</label>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Ảnh thumbnail</label>
+                    <input id="thumbnailFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="form-control" />
+                    <div id="thumbnailStatus" class="text-muted small mt-2"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Preview</label>
+                    <div class="border rounded bg-light d-flex align-items-center justify-content-center mentor-course-edit-thumbnail-frame">
+                        <img id="thumbnailPreview"
+                             src="@Model?.ThumbnailUrl"
+                             alt=""
+                             class="mentor-course-edit-thumbnail-image @(string.IsNullOrWhiteSpace(Model?.ThumbnailUrl) ? "is-hidden" : "")" />
+                        <span id="thumbnailPlaceholder"
+                              class="text-muted small @(string.IsNullOrWhiteSpace(Model?.ThumbnailUrl) ? "" : "is-hidden")">Chưa có thumbnail</span>
+                    </div>
                 </div>
             </div>
-            <div class="d-flex gap-2">
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Cấp độ</label>
+                    <select name="level" class="form-select">
+                        @foreach (var lvl in new[] { "BEGINNER", "INTERMEDIATE", "ADVANCED" })
+                        {
+                            <option value="@lvl" selected="@(lvl == Model?.Level)">@lvl</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Trạng thái</label>
+                    <select name="isPublished" class="form-select">
+                        <option value="false" selected="@(Model?.IsPublished != true)">Draft</option>
+                        <option value="true" selected="@(Model?.IsPublished == true)">Publish</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-check-lg me-1"></i>Lưu thay đổi
                 </button>
@@ -63,3 +81,36 @@
         </form>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    const thumbnailFile = document.getElementById('thumbnailFile');
+    const thumbnailUrl = document.getElementById('thumbnailUrl');
+    const thumbnailStatus = document.getElementById('thumbnailStatus');
+    const thumbnailPreview = document.getElementById('thumbnailPreview');
+    const thumbnailPlaceholder = document.getElementById('thumbnailPlaceholder');
+
+    thumbnailFile?.addEventListener('change', async () => {
+        const file = thumbnailFile.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('image', file);
+        thumbnailStatus.textContent = 'Đang tải thumbnail...';
+
+        try {
+            const response = await fetch('@uploadImageUrl', { method: 'POST', body: formData });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'Upload thất bại');
+
+            thumbnailUrl.value = data.url;
+            thumbnailPreview.src = data.url;
+            thumbnailPreview.style.display = 'block';
+            thumbnailPlaceholder.style.display = 'none';
+            thumbnailStatus.textContent = 'Đã tải thumbnail.';
+        } catch (error) {
+            thumbnailStatus.textContent = error.message || 'Upload thất bại';
+        }
+    });
+</script>
+}

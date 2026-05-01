@@ -1,81 +1,110 @@
+@using System.Text.Json
 @using AIMS.ViewModels.LMS
 @model CourseVm
 
 @{
     ViewData["Title"] = "Học bài";
-    var course     = Model;
-
-    // ⭐ Typed — không dùng dynamic
+    var course = Model;
     var enrollment = ViewBag.Enrollment as EnrollmentVm;
+    var courseQuizzes = ViewBag.CourseQuizzes as List<QuizBankVm> ?? new List<QuizBankVm>();
+
+    var lessons = (course?.Chapters ?? new List<ChapterVm>())
+        .OrderBy(ch => ch.SortOrder)
+        .SelectMany(ch => ch.Lessons
+            .OrderBy(l => l.SortOrder)
+            .Select(l => new
+            {
+                id = l.Id,
+                chapterId = ch.Id,
+                chapterTitle = ch.Title,
+                title = l.Title,
+                lessonType = l.LessonType,
+                description = l.Description,
+                videoUrl = l.VideoUrl,
+                videoEmbedUrl = l.VideoEmbedUrl,
+                slideUrl = l.SlideUrl,
+                slideEmbedUrl = l.SlideEmbedUrl,
+                imageUrls = l.ImageUrls,
+                durationMinutes = l.DurationMinutes ?? 0,
+                isRequired = l.IsRequired
+            }))
+        .ToList();
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/intern-lms-learn.css" />
 }
 
 <div class="row g-4">
-    <!-- Video Player -->
-    <div class="col-md-8">
+    <div class="col-lg-8">
         <div class="card border-0 shadow-sm mb-3">
-            <div class="card-body p-0">
-                <div id="contentArea" class="p-4 text-center text-muted"
-                     style="min-height:300px;display:flex;align-items:center;justify-content:center">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                     <div>
-                        <i class="bi bi-play-circle fs-1 text-primary"></i>
-                        <p class="mt-2">Chọn bài học từ danh sách bên phải</p>
+                        <div id="lessonChapter" class="text-muted small"></div>
+                        <h4 id="lessonTitle" class="fw-bold mb-1">@course?.Title</h4>
+                        <div id="lessonMeta" class="text-muted small">Chọn bài học từ danh sách bên phải</div>
+                    </div>
+                    <span id="lessonRequiredBadge" class="badge text-bg-light border d-none"></span>
+                </div>
+                <div id="contentArea" class="learn-stage">
+                    <div class="learn-stage-empty">
+                        <div>
+                            <i class="bi bi-play-circle fs-1 text-primary"></i>
+                            <p class="mt-2 mb-0">Chọn bài học từ danh sách bên phải</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Nút hoàn thành (inject bằng JS) -->
+        <div id="quizArea"></div>
         <div id="completeArea"></div>
 
-        <!-- Progress overall -->
         @if (enrollment != null)
         {
+            var completionWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(enrollment.CompletionPercent), 0, 100)}";
+
             <div class="card border-0 shadow-sm mt-3">
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
                         <span class="fw-semibold">Tiến độ khóa học</span>
                         <span class="text-primary fw-bold">@enrollment.CompletionPercent%</span>
                     </div>
-                    <div class="progress" style="height:10px">
-                        <div class="progress-bar bg-primary"
-                             style="width:@enrollment.CompletionPercent%"></div>
+                    <div class="progress learn-enrollment-progress">
+                        <div class="progress-bar bg-primary @completionWidthClass"></div>
                     </div>
                 </div>
             </div>
         }
     </div>
 
-    <!-- Danh sách bài học -->
-    <div class="col-md-4">
+    <div class="col-lg-4">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold border-0 pt-3">
                 <i class="bi bi-list-ul me-2"></i>@course?.Title
             </div>
-            <div class="card-body p-0" style="max-height:500px;overflow-y:auto">
+            <div class="card-body p-0 learn-lesson-nav">
                 @if (course?.Chapters != null)
                 {
-                    foreach (var chapter in course.Chapters)
+                    foreach (var chapter in course.Chapters.OrderBy(ch => ch.SortOrder))
                     {
                         <div class="p-2 bg-light border-bottom">
-                            <small class="fw-semibold text-muted">@chapter.Title</small>
+                            <small class="fw-semibold text-muted">@chapter.SortOrder. @chapter.Title</small>
                         </div>
-                        foreach (var lesson in chapter.Lessons)
+                        foreach (var lesson in chapter.Lessons.OrderBy(l => l.SortOrder))
                         {
-                            <div class="d-flex align-items-center p-3 border-bottom"
-                                 style="cursor:pointer"
-                                 onclick="loadLesson(
-                                     '@lesson.ContentUrl',
-                                     '@lesson.LessonType',
-                                     '@lesson.Title',
-                                     @lesson.Id,
-                                     @(enrollment?.Id ?? 0),
-                                     @(course.Id))">
-                                <i class="bi @(lesson.LessonType=="VIDEO"?"bi-play-circle text-primary":"bi-file-text text-danger") me-2"></i>
-                                <div class="flex-grow-1">
-                                    <div class="small fw-semibold">@lesson.Title</div>
-                                    <small class="text-muted">@lesson.DurationMinutes phút</small>
+                            <button type="button"
+                                    class="lesson-nav-item w-100 text-start border-0 bg-white p-3 border-bottom"
+                                    data-lesson-id="@lesson.Id">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi @(lesson.LessonType == "VIDEO" ? "bi-play-circle text-primary" : lesson.LessonType == "QUIZ" ? "bi-patch-question text-warning" : "bi-file-text text-danger")"></i>
+                                    <div class="flex-grow-1">
+                                        <div class="small fw-semibold lesson-nav-title">@lesson.SortOrder. @lesson.Title</div>
+                                        <small class="text-muted">@lesson.LessonType · @(lesson.DurationMinutes?.ToString() ?? "0") phút</small>
+                                    </div>
                                 </div>
-                            </div>
+                            </button>
                         }
                     }
                 }
@@ -85,44 +114,200 @@
 </div>
 
 @section Scripts {
+<script src="~/js/task-markdown.js"></script>
 <script>
-function loadLesson(url, type, title, lessonId, enrollmentId, courseId) {
-    const area = document.getElementById('contentArea');
+    const lessons = @Html.Raw(JsonSerializer.Serialize(lessons));
+    const courseQuizzes = @Html.Raw(JsonSerializer.Serialize(courseQuizzes.Select(q => new
+    {
+        id = q.Id,
+        lessonId = q.LessonId,
+        title = q.Title,
+        totalQuestions = q.TotalQuestions,
+        passScore = q.PassScore,
+        maxAttempts = q.MaxAttempts
+    })));
 
-    if (type === 'VIDEO' && url) {
-        const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
-        if (ytMatch) {
-            area.innerHTML = `<iframe width="100%" height="360"
-                src="https://www.youtube.com/embed/${ytMatch[1]}"
-                frameborder="0" allowfullscreen></iframe>`;
-        } else {
-            area.innerHTML = `<video controls style="width:100%;max-height:360px">
-                <source src="${url}"></video>`;
-        }
-    } else if (type === 'DOCUMENT' && url) {
-        area.innerHTML = `<div style="padding:2rem">
-            <i class="bi bi-file-pdf fs-1 text-danger"></i>
-            <p class="mt-2 fw-semibold">${title}</p>
-            <a href="${url}" target="_blank" class="btn btn-outline-primary">
-                <i class="bi bi-download me-1"></i>Tải tài liệu
-            </a></div>`;
-    } else {
-        area.innerHTML = `<p class="p-4">${title}</p>`;
+    const enrollmentId = @(enrollment?.Id ?? 0);
+    const courseId = @(course?.Id ?? 0);
+    const contentArea = document.getElementById('contentArea');
+    const completeArea = document.getElementById('completeArea');
+    const quizArea = document.getElementById('quizArea');
+    const lessonTitle = document.getElementById('lessonTitle');
+    const lessonChapter = document.getElementById('lessonChapter');
+    const lessonMeta = document.getElementById('lessonMeta');
+    const lessonRequiredBadge = document.getElementById('lessonRequiredBadge');
+
+    document.querySelectorAll('.lesson-nav-item').forEach(button => {
+        button.addEventListener('click', () => {
+            const lessonId = Number(button.dataset.lessonId);
+            loadLesson(lessonId);
+        });
+    });
+
+    if (lessons.length > 0) {
+        loadLesson(lessons[0].id);
     }
 
-    // Nút đánh dấu hoàn thành
-    const completeArea = document.getElementById('completeArea');
-    completeArea.innerHTML = `
-        <div class="mt-3 text-end">
-            <form method="post" action="/Intern/LMS/CompleteLesson">
-                <input type="hidden" name="enrollmentId" value="${enrollmentId}" />
-                <input type="hidden" name="lessonId"     value="${lessonId}" />
-                <input type="hidden" name="courseId"     value="${courseId}" />
-                <button type="submit" class="btn btn-success">
-                    <i class="bi bi-check-lg me-1"></i>Đánh dấu hoàn thành
-                </button>
-            </form>
-        </div>`;
-}
+    function loadLesson(lessonId) {
+        const lesson = lessons.find(item => item.id === lessonId);
+        if (!lesson) return;
+
+        document.querySelectorAll('.lesson-nav-item').forEach(item => {
+            item.classList.toggle('active', Number(item.dataset.lessonId) === lessonId);
+        });
+
+        lessonTitle.textContent = lesson.title;
+        lessonChapter.textContent = lesson.chapterTitle || '';
+        lessonMeta.textContent = `${lesson.lessonType} · ${lesson.durationMinutes || 0} phút`;
+        lessonRequiredBadge.textContent = lesson.isRequired ? 'Bắt buộc' : 'Tùy chọn';
+        lessonRequiredBadge.classList.remove('d-none');
+
+        renderLessonContent(lesson);
+        renderQuizArea(lesson);
+        renderCompleteButton(lessonId);
+    }
+
+    function renderLessonContent(lesson) {
+        const sections = [];
+
+        if (lesson.description) {
+            sections.push(`
+                <div class="mb-3">
+                    <div class="learn-markdown">${window.taskMarkdown.render(lesson.description)}</div>
+                </div>
+            `);
+        }
+
+        if (lesson.videoEmbedUrl) {
+            sections.push(`
+                <div class="learn-stage-frame mb-3">
+                    <iframe src="${escapeHtml(lesson.videoEmbedUrl)}" title="${escapeHtml(lesson.title)}" allowfullscreen></iframe>
+                </div>
+            `);
+        } else if (lesson.videoUrl) {
+            sections.push(`
+                <div class="learn-stage-frame mb-3">
+                    <video controls>
+                        <source src="${escapeHtml(lesson.videoUrl)}">
+                    </video>
+                </div>
+            `);
+        }
+
+        if (lesson.slideEmbedUrl) {
+            sections.push(`
+                <div class="learn-stage-frame mb-3">
+                    <iframe src="${escapeHtml(lesson.slideEmbedUrl)}" title="${escapeHtml(lesson.title)}" allowfullscreen></iframe>
+                </div>
+            `);
+        } else if (lesson.slideUrl) {
+            sections.push(`
+                <div class="p-4 border rounded-3 bg-light mb-3">
+                    <a href="${escapeHtml(lesson.slideUrl)}" target="_blank" rel="noopener" class="btn btn-outline-primary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Mở tài liệu / Slides
+                    </a>
+                </div>
+            `);
+        }
+
+        if (Array.isArray(lesson.imageUrls) && lesson.imageUrls.length > 0) {
+            sections.push(`
+                <div class="learn-stage-images">
+                    ${lesson.imageUrls.map(url => `
+                        <a href="${escapeHtml(url)}" target="_blank" rel="noopener">
+                            <img src="${escapeHtml(url)}" alt="Lesson image" />
+                        </a>
+                    `).join('')}
+                </div>
+            `);
+        }
+
+        if (sections.length === 0) {
+            contentArea.innerHTML = `
+                <div class="learn-stage-empty">
+                    <div>
+                        <i class="bi bi-journal-text fs-1 text-primary"></i>
+                        <p class="mt-2 mb-0">Bài học này hiện chưa có nội dung hiển thị.</p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        contentArea.innerHTML = sections.join('');
+    }
+
+    function renderQuizArea(lesson) {
+        const matchedQuizzes = courseQuizzes.filter(quiz => Number(quiz.lessonId || 0) === Number(lesson.id));
+        const generalQuizzes = courseQuizzes.filter(quiz => !quiz.lessonId);
+        const visibleQuizzes = matchedQuizzes.length ? matchedQuizzes : generalQuizzes;
+
+        if (!visibleQuizzes.length) {
+            quizArea.innerHTML = '';
+            return;
+        }
+
+        const title = matchedQuizzes.length
+            ? 'Bài kiểm tra của bài học này'
+            : 'Bài kiểm tra của khóa học';
+
+        const hint = matchedQuizzes.length
+            ? 'Quiz này được gắn trực tiếp với bài học đang xem.'
+            : 'Đây là quiz chung của khóa học, không gắn với một bài học cụ thể.';
+
+        quizArea.innerHTML = `
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold border-0 pt-3">
+                    <i class="bi bi-patch-question me-2 text-warning"></i>${title}
+                </div>
+                <div class="card-body">
+                    <div class="text-muted small mb-3">${hint}</div>
+                    <div class="d-grid gap-3">
+                        ${visibleQuizzes.map(quiz => `
+                            <div class="learn-quiz-card">
+                                <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+                                    <div class="fw-semibold">${escapeHtml(quiz.title)}</div>
+                                    <span class="badge text-bg-light border">${quiz.totalQuestions} câu</span>
+                                </div>
+                                <div class="text-muted small mb-3">
+                                    Pass ${quiz.passScore}% · ${quiz.maxAttempts} lượt
+                                </div>
+                                <form method="post" action="/Intern/Quiz/Start">
+                                    <input type="hidden" name="quizBankId" value="${quiz.id}" />
+                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-play-fill me-1"></i>Vào quiz
+                                    </button>
+                                </form>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderCompleteButton(lessonId) {
+        completeArea.innerHTML = `
+            <div class="mt-3 text-end">
+                <form method="post" action="/Intern/LMS/CompleteLesson">
+                    <input type="hidden" name="enrollmentId" value="${enrollmentId}" />
+                    <input type="hidden" name="lessonId" value="${lessonId}" />
+                    <input type="hidden" name="courseId" value="${courseId}" />
+                    <button type="submit" class="btn btn-success" ${enrollmentId ? '' : 'disabled'}>
+                        <i class="bi bi-check-lg me-1"></i>Đánh dấu hoàn thành
+                    </button>
+                </form>
+            </div>
+        `;
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
 </script>
 }

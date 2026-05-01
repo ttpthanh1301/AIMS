@@ -12,6 +12,10 @@
         .ToHashSet();
 }
 
+@section Styles {
+<link rel="stylesheet" href="~/css/intern-lms-index.css" />
+}
+
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
         <a class="nav-link active" data-bs-toggle="tab" href="#enrolled">
@@ -28,6 +32,8 @@
         <div class="row g-3">
             @foreach (var e in enrollments)
             {
+                var completionWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(e.CompletionPercent), 0, 100)}";
+
                 <div class="col-md-6 col-xl-4">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
@@ -39,8 +45,8 @@
                                         @e.CompletionPercent%
                                     </small>
                                 </div>
-                                <div class="progress" style="height:8px">
-                                    <div class="progress-bar bg-primary"                                         style="width:@e.CompletionPercent%"></div>
+                                <div class="progress lms-enrollment-progress">
+                                    <div class="progress-bar bg-primary @completionWidthClass"></div>
                                 </div>
                             </div>
                             @if (e.CompletionPercent >= 100)

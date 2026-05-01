@@ -1,0 +1,319 @@
+    .mentor-dashboard {
+        display: grid;
+        gap: 1.5rem;
+    }
+    .mentor-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 24px;
+        padding: 1.75rem;
+        background:
+            radial-gradient(circle at top right, rgba(142, 199, 64, .22), transparent 28%),
+            linear-gradient(135deg, rgba(31, 124, 192, .14), rgba(31, 124, 192, .04));
+        border: 1px solid rgba(31, 124, 192, .14);
+    }
+
+    .mentor-hero::after {
+        content: "";
+        position: absolute;
+        right: -42px;
+        bottom: -42px;
+        width: 160px;
+        height: 160px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(142, 199, 64, .22), rgba(142, 199, 64, 0));
+        pointer-events: none;
+    }
+
+    .mentor-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        padding: .42rem .75rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,.78);
+        color: #145f98;
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+    }
+
+    .mentor-title {
+        margin: 1rem 0 .35rem;
+        font-size: clamp(1.8rem, 2vw, 2.4rem);
+        line-height: 1.12;
+        font-weight: 800;
+        color: #17324d;
+    }
+
+    .mentor-subtitle {
+        max-width: 780px;
+        margin: 0;
+        color: #57738d;
+        line-height: 1.65;
+    }
+
+    .mentor-hero-actions {
+        display: flex;
+        gap: .75rem;
+        flex-wrap: wrap;
+        margin-top: 1.35rem;
+    }
+
+    .mentor-chip-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .9rem;
+        margin-top: 1.5rem;
+    }
+
+    .mentor-chip {
+        padding: .95rem 1rem;
+        border-radius: 16px;
+        background: rgba(255,255,255,.82);
+        border: 1px solid rgba(31,124,192,.1);
+    }
+
+    .mentor-chip-label {
+        display: block;
+        margin-bottom: .25rem;
+        color: #6f859a;
+        font-size: .82rem;
+        font-weight: 600;
+    }
+
+    .mentor-chip-value {
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: #145f98;
+    }
+
+    .mentor-metric-card {
+        height: 100%;
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .mentor-metric-card .card-body {
+        padding: 1.2rem 1.25rem;
+    }
+
+.mentor-metric-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+    display: inline-flex;
+        align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+}
+
+.mentor-metric-icon--interns {
+    background: rgba(31,124,192,.12);
+    color: #1f7cc0;
+}
+
+.mentor-metric-icon--tasks {
+    background: rgba(142,199,64,.16);
+    color: #78b02f;
+}
+
+.mentor-metric-icon--overdue {
+    background: rgba(225,109,91,.14);
+    color: #d85847;
+}
+
+.mentor-metric-icon--hours {
+    background: rgba(31,124,192,.12);
+    color: #145f98;
+}
+
+.mentor-metric-label {
+        color: #6f859a;
+        font-size: .84rem;
+        font-weight: 600;
+    }
+
+    .mentor-metric-value {
+        color: #17324d;
+        font-size: 1.9rem;
+        line-height: 1;
+        font-weight: 800;
+    }
+
+    .mentor-panel {
+        border-radius: 22px;
+        overflow: hidden;
+    }
+
+    .mentor-panel .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.15rem 1.35rem 0;
+    }
+
+    .mentor-panel-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #17324d;
+    }
+
+    .mentor-panel-subtitle {
+        display: block;
+        margin-top: .18rem;
+        color: #7490a4;
+        font-size: .82rem;
+    }
+
+    .mentor-chart-wrap {
+        position: relative;
+        min-height: 360px;
+        padding: 0 1.35rem 1.35rem;
+    }
+
+    .mentor-side-list {
+        display: grid;
+        gap: .95rem;
+        padding: 0 1.35rem 1.35rem;
+    }
+
+    .mentor-intern-card {
+        border: 1px solid rgba(31,124,192,.1);
+        border-radius: 18px;
+        padding: 1rem 1rem .95rem;
+        background: linear-gradient(180deg, rgba(31,124,192,.04), rgba(255,255,255,.9));
+    }
+
+    .mentor-intern-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: .8rem;
+    }
+
+    .mentor-intern-name {
+        font-weight: 700;
+        color: #17324d;
+    }
+
+    .mentor-intern-email {
+        color: #7390a4;
+        font-size: .8rem;
+    }
+
+    .mentor-score {
+        min-width: 62px;
+        padding: .38rem .55rem;
+        border-radius: 999px;
+        background: rgba(142,199,64,.16);
+        color: #58861a;
+        font-size: .8rem;
+        font-weight: 800;
+        text-align: center;
+    }
+
+    .mentor-progress {
+        height: 9px;
+        border-radius: 999px;
+        background: #e8f0f7;
+        overflow: hidden;
+        margin-bottom: .85rem;
+    }
+
+    .mentor-progress-bar {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #1f7cc0, #8ec740);
+    }
+
+    .mentor-intern-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .65rem;
+    }
+
+    .mentor-mini-stat {
+        border-radius: 14px;
+        background: rgba(255,255,255,.84);
+        padding: .65rem .75rem;
+    }
+
+    .mentor-mini-stat-label {
+        color: #7893a7;
+        font-size: .74rem;
+        margin-bottom: .18rem;
+    }
+
+    .mentor-mini-stat-value {
+        color: #17324d;
+        font-weight: 800;
+        font-size: 1rem;
+    }
+
+    .mentor-report-alert {
+        border-radius: 18px;
+        border: 1px solid rgba(142,199,64,.24);
+        background: linear-gradient(135deg, rgba(142,199,64,.14), rgba(31,124,192,.08));
+        color: #17324d;
+    }
+
+    .mentor-report-alert .badge {
+        background: rgba(255,255,255,.82) !important;
+        color: #145f98 !important;
+        border: 1px solid rgba(31,124,192,.1);
+        font-weight: 700;
+    }
+
+    .mentor-table-card .card-header {
+        padding: 1.15rem 1.35rem;
+    }
+
+    .mentor-table-card table td,
+    .mentor-table-card table th {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .mentor-table-card table td:last-child,
+    .mentor-table-card table th:last-child {
+        white-space: normal;
+    }
+
+    .mentor-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .32rem .62rem;
+        border-radius: 999px;
+        font-size: .76rem;
+        font-weight: 700;
+        background: rgba(31,124,192,.1);
+        color: #145f98;
+    }
+
+    @media (max-width: 991.98px) {
+        .mentor-chip-grid,
+        .mentor-intern-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .mentor-hero,
+        .mentor-panel .card-header,
+        .mentor-chart-wrap,
+        .mentor-side-list,
+        .mentor-table-card .card-header {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        .mentor-chip-grid,
+        .mentor-intern-stats {
+            grid-template-columns: 1fr;
+        }
+    }

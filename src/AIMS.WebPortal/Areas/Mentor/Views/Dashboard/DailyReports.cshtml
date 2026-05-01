@@ -5,35 +5,72 @@
     var reports = Model ?? new List<DailyReportVm>();
     var assignments = ViewBag.Assignments as List<InternAssignmentVm>
         ?? new List<InternAssignmentVm>();
+    var pendingReports = reports.Where(r => !r.HasFeedback).ToList();
+    var respondedReports = reports.Where(r => r.HasFeedback).ToList();
+    var latestReportDate = reports.Any() ? reports.Max(r => r.ReportDate) : (DateTime?)null;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="fw-bold mb-0">
-        <i class="bi bi-journal-text text-primary me-2"></i>Daily Reports
-    </h5>
-    <!-- Filter theo intern -->
-    <form method="get" class="d-flex gap-2">
-        <select name="internId" class="form-select form-select-sm" style="width:200px"     onchange="this.form.submit()">
-            <option value="">Tất cả Intern</option>
-            @foreach (var a in assignments)
-            {
-                var selected = ViewBag.InternId?.ToString() == a.InternUserId;
-                if (selected)
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-daily-reports.css" />
+}
+
+<div class="daily-report-page">
+    <section class="daily-report-hero">
+        <span class="daily-report-kicker">
+            <i class="bi bi-journal-richtext"></i> Mentor Inbox
+        </span>
+        <h1 class="daily-report-title">Daily Reports của Intern</h1>
+        <div class="daily-report-stats">
+            <div class="daily-report-stat">
+                <div class="daily-report-stat-label">Tổng báo cáo</div>
+                <div class="daily-report-stat-value">@reports.Count</div>
+            </div>
+            <div class="daily-report-stat">
+                <div class="daily-report-stat-label">Chờ phản hồi</div>
+                <div class="daily-report-stat-value">@pendingReports.Count</div>
+            </div>
+            <div class="daily-report-stat">
+                <div class="daily-report-stat-label">Đã phản hồi</div>
+                <div class="daily-report-stat-value">@respondedReports.Count</div>
+            </div>
+            <div class="daily-report-stat">
+                <div class="daily-report-stat-label">Báo cáo gần nhất</div>
+                <div class="daily-report-stat-value daily-report-stat-value--compact">
+                    @(latestReportDate?.ToString("dd/MM/yyyy") ?? "--")
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="daily-report-toolbar">
+        <div>
+            <h5 class="fw-bold mb-1">
+                <i class="bi bi-journal-text text-primary me-2"></i>Danh sách báo cáo
+            </h5>
+        </div>
+        <form method="get" class="daily-report-filter">
+            <label class="form-label fw-semibold small text-muted mb-2">Lọc theo Intern</label>
+            <select name="internId" class="form-select" onchange="this.form.submit()">
+                <option value="">Tất cả Intern</option>
+                @foreach (var a in assignments)
                 {
-                    <option value="@a.InternUserId" selected>@a.InternName</option>
+                    var selected = ViewBag.InternId?.ToString() == a.InternUserId;
+                    if (selected)
+                    {
+                        <option value="@a.InternUserId" selected>@a.InternName</option>
+                    }
+                    else
+                    {
+                        <option value="@a.InternUserId">@a.InternName</option>
+                    }
                 }
-                else
-                {
-                    <option value="@a.InternUserId">@a.InternName</option>
-                }
-            }
-        </select>
-    </form>
-</div>
+            </select>
+        </form>
+    </section>
 
 @if (TempData["Success"] != null)
 {
-    <div class="alert alert-success alert-dismissible">
+    <div class="alert alert-success alert-dismissible mb-0">
         @TempData["Success"]
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -41,77 +78,89 @@
 
 @if (!reports.Any())
 {
-    <div class="alert alert-info">
-        <i class="bi bi-info-circle me-2"></i>Chưa có báo cáo nào.
+    <div class="daily-report-empty">
+        <i class="bi bi-inbox fs-2 d-block mb-3 text-primary"></i>
+        Chưa có báo cáo nào trong phạm vi lọc hiện tại.
     </div>
 }
-
-@foreach (var r in reports)
+else
 {
-    <div class="card border-0 shadow-sm mb-3 @(!r.HasFeedback ? "border-start border-warning border-3" : "")">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                    <span class="fw-bold text-primary">@r.InternName</span>
-                    <span class="text-muted ms-2">
-                        📅 @r.ReportDate.ToString("dd/MM/yyyy")
-                    </span>
-                </div>
-                @if (!r.HasFeedback)
-                {
-                    <span class="badge bg-warning text-dark">Chờ phản hồi</span>
-                }
-                else
-                {
-                    <span class="badge bg-success">Đã phản hồi</span>
-                }
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-4">
-                    <small class="text-muted fw-semibold d-block mb-1">
-                        <i class="bi bi-check2-circle me-1"></i>Hôm nay đã làm
-                    </small>
-                    <p class="mb-0 small">@r.Content</p>
-                </div>
-                @if (r.PlannedTomorrow != null)
-                {
-                    <div class="col-md-4">
-                        <small class="text-muted fw-semibold d-block mb-1">
-                            <i class="bi bi-calendar-plus me-1"></i>Kế hoạch ngày mai
-                        </small>
-                        <p class="mb-0 small">@r.PlannedTomorrow</p>
+    <div class="daily-report-list">
+        @foreach (var r in reports.OrderByDescending(r => !r.HasFeedback).ThenByDescending(r => r.ReportDate))
+        {
+            <div class="card daily-report-card @(r.HasFeedback ? "" : "pending")">
+                <div class="card-body">
+                    <div class="daily-report-head">
+                        <div>
+                            <div class="daily-report-name">@r.InternName</div>
+                            <div class="daily-report-date">
+                                <i class="bi bi-calendar2"></i>@r.ReportDate.ToString("dd/MM/yyyy")
+                            </div>
+                        </div>
+                        @if (!r.HasFeedback)
+                        {
+                            <span class="daily-report-status pending">
+                                <i class="bi bi-bell-fill"></i>Chờ phản hồi
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="daily-report-status done">
+                                <i class="bi bi-check-circle-fill"></i>Đã phản hồi
+                            </span>
+                        }
                     </div>
-                }
-                @if (r.Issues != null)
-                {
-                    <div class="col-md-4">
-                        <small class="text-muted fw-semibold d-block mb-1">
-                            <i class="bi bi-exclamation-triangle me-1 text-warning"></i>Vấn đề
-                        </small>
-                        <p class="mb-0 small text-warning">@r.Issues</p>
-                    </div>
-                }
-            </div>
 
-            @if (r.HasFeedback)
-            {
-                <div class="alert alert-success py-2 mb-0">
-                    <strong><i class="bi bi-chat-dots me-1"></i>Phản hồi của bạn:</strong>
-                    @r.MentorFeedback
+                    <div class="daily-report-sections">
+                        <div class="daily-report-section">
+                            <div class="daily-report-section-label">
+                                <i class="bi bi-check2-circle text-primary"></i>
+                                <span>Hôm nay đã làm</span>
+                            </div>
+                            <br>
+                            <div class="daily-report-section-content">@r.Content</div>
+                        </div>
+                        <div class="daily-report-section">
+                            <div class="daily-report-section-label">
+                                <i class="bi bi-calendar-plus text-primary"></i>
+                                <span>Kế hoạch ngày mai</span>
+                            </div>
+                            <div class="daily-report-section-content">
+                                @(string.IsNullOrWhiteSpace(r.PlannedTomorrow) ? "Chưa cập nhật." : r.PlannedTomorrow)
+                            </div>
+                        </div>
+                        <div class="daily-report-section @(string.IsNullOrWhiteSpace(r.Issues) ? "" : "warn")">
+                            <div class="daily-report-section-label">
+                                <i class="bi bi-exclamation-triangle text-warning"></i>
+                                <span>Vấn đề</span>
+                            </div>
+                            <div class="daily-report-section-content">
+                                @(string.IsNullOrWhiteSpace(r.Issues) ? "Không có vấn đề cần lưu ý." : r.Issues)
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (r.HasFeedback)
+                    {
+                        <div class="daily-report-feedback">
+                            <strong><i class="bi bi-chat-dots me-1"></i>Phản hồi của bạn:</strong>
+                            <div class="mt-2">@r.MentorFeedback</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <form asp-action="Feedback" method="post" class="daily-report-form">
+                            <input type="hidden" name="reportId" value="@r.Id" />
+                            <input name="feedback" class="form-control"
+                                   placeholder="Nhập phản hồi cho intern..." required />
+                            <button type="submit" class="btn btn-primary text-nowrap">
+                                <i class="bi bi-send me-1"></i>Gửi phản hồi
+                            </button>
+                        </form>
+                    }
                 </div>
-            }
-            else
-            {
-                <form asp-action="Feedback" method="post"            class="d-flex gap-2 mt-2">
-                    <input type="hidden" name="reportId" value="@r.Id" />
-                    <input name="feedback" class="form-control form-control-sm"      placeholder="Nhập phản hồi cho intern..."
-                           required />
-                    <button type="submit" class="btn btn-sm btn-primary text-nowrap">
-                        <i class="bi bi-send me-1"></i>Gửi
-                    </button>
-                </form>
-            }
-        </div>
+            </div>
+        }
     </div>
 }
+</div>

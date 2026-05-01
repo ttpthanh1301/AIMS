@@ -116,22 +116,30 @@ public class LessonProgressController : ControllerBase
     private async Task<decimal> RecalculateCompletionAsync(
         Enrollment enrollment)
     {
-        // Tổng số lesson required trong course
-        var totalRequired = await _context.Lessons
+        var totalLessons = await _context.Lessons
             .Include(l => l.Chapter)
-            .CountAsync(l => l.Chapter.CourseId == enrollment.CourseId
-                          && l.IsRequired);
+            .CountAsync(l => l.Chapter.CourseId == enrollment.CourseId);
 
-        if (totalRequired == 0) return 100;
+        var totalQuizzes = await _context.QuizBanks
+            .CountAsync(q => q.CourseId == enrollment.CourseId);
 
-        // Số lesson required đã complete
-        var completedRequired = await _context.LessonProgresses
-            .Include(p => p.Lesson)
+        var totalItems = totalLessons + totalQuizzes;
+
+        if (totalItems == 0) return 100;
+
+        var completedLessons = await _context.LessonProgresses
             .CountAsync(p => p.EnrollmentId == enrollment.Id
-                          && p.IsCompleted
-                          && p.Lesson.IsRequired);
+                          && p.IsCompleted);
 
-        return Math.Round((decimal)completedRequired / totalRequired * 100, 2);
+        var completedQuizzes = await _context.UserQuizAttempts
+            .Where(a => a.QuizBank.CourseId == enrollment.CourseId
+                     && a.InternUserId == enrollment.InternUserId
+                     && a.IsPassed == true)
+            .Select(a => a.QuizBankId)
+            .Distinct()
+            .CountAsync();
+
+        return Math.Round((decimal)(completedLessons + completedQuizzes) / totalItems * 100, 0, MidpointRounding.AwayFromZero);
     }
 }
 

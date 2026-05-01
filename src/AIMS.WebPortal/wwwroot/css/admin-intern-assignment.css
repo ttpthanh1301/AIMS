@@ -1,0 +1,107 @@
+    .assignment-table {
+        table-layout: fixed;
+        width: 100%;
+        font-size: 12px;
+    }
+    .assignment-table th {
+        padding: .65rem .45rem;
+        text-align: center;
+        vertical-align: middle;
+        white-space: nowrap;
+        font-size: 12px;
+    }
+
+    .assignment-table td {
+        padding: .65rem .45rem;
+        vertical-align: middle;
+        font-size: 12px;
+    }
+
+    .assignment-table .cell-center {
+        text-align: center;
+    }
+
+    .assignment-table .cell-actions {
+        width: 58px;
+        text-align: center;
+    }
+
+    .assignment-table .col-intern {
+        width: 24%;
+    }
+
+    .assignment-table .col-mentor {
+        width: 18%;
+    }
+
+    .assignment-table .col-period {
+        width: 17%;
+    }
+
+    .assignment-table .col-progress {
+        width: 19%;
+    }
+
+    .assignment-table .col-date {
+        width: 14%;
+    }
+
+    .assignment-table .col-action {
+        width: 8%;
+    }
+
+    .assignment-table .text-ellipsis {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .assignment-table .progress-wrap {
+        width: 100%;
+        max-width: 130px;
+        margin: 0 auto;
+    }
+
+    .assignment-table .progress {
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(31,124,192,.10);
+    }
+
+    .assignment-table .progress-bar {
+        border-radius: 999px;
+    }
+
+    .assignment-table .badge {
+        max-width: 100%;
+        white-space: normal;
+        line-height: 1.3;
+        font-size: 11px;
+        padding: .35rem .5rem;
+    }
+
+    .assignment-table .btn-sm {
+        padding: .25rem .45rem;
+        font-size: 11px;
+    }
+
+    @media (min-width: 1200px) {
+        .assignment-form-col {
+            flex: 0 0 auto;
+            width: 30%;
+        }
+
+        .assignment-list-col {
+            flex: 0 0 auto;
+            width: 70%;
+        }
+    }
+
+    @media (max-width: 1199.98px) {
+        .assignment-table {
+            min-width: 760px;
+        }
+    }
+

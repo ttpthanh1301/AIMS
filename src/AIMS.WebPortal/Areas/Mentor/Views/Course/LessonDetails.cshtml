@@ -1,0 +1,106 @@
+@using AIMS.ViewModels.LMS
+@model LessonVm
+@{
+    ViewData["Title"] = "Chi tiết Bài học";
+    int courseId = ViewBag.CourseId;
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-course-lesson-details.css" />
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h5 class="fw-bold mb-1">
+            <i class="bi bi-journal-text text-primary me-2"></i>@Model.Title
+        </h5>
+        <div class="text-muted small">@Model.ChapterTitle</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-action="EditLesson" asp-route-courseId="@courseId" asp-route-lessonId="@Model.Id" class="btn btn-primary btn-sm">
+            <i class="bi bi-pencil-square me-1"></i>Chỉnh sửa
+        </a>
+        <a asp-action="ManageLessons" asp-route-courseId="@courseId" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Quay lại
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="small text-uppercase text-muted mb-2">Thông tin</div>
+                <div class="d-flex justify-content-between border-bottom py-2">
+                    <span class="text-muted">Loại</span>
+                    <span class="fw-semibold">@Model.LessonType</span>
+                </div>
+                <div class="d-flex justify-content-between border-bottom py-2">
+                    <span class="text-muted">Thứ tự</span>
+                    <span class="fw-semibold">@Model.SortOrder</span>
+                </div>
+                <div class="d-flex justify-content-between border-bottom py-2">
+                    <span class="text-muted">Thời lượng</span>
+                    <span class="fw-semibold">@(Model.DurationMinutes?.ToString() ?? "0") phút</span>
+                </div>
+                <div class="d-flex justify-content-between py-2">
+                    <span class="text-muted">Yêu cầu</span>
+                    <span class="fw-semibold">@(Model.IsRequired ? "Bắt buộc" : "Tùy chọn")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        @if (!string.IsNullOrWhiteSpace(Model.Description))
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold border-0 pt-3">Nội dung</div>
+                <div class="card-body">
+                    <div class="lesson-markdown-content" data-task-markdown>@Model.Description</div>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.VideoEmbedUrl))
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold border-0 pt-3">Video</div>
+                <div class="card-body lesson-detail-frame">
+                    <iframe src="@Model.VideoEmbedUrl" title="@Model.Title" allowfullscreen></iframe>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.SlideEmbedUrl))
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white fw-semibold border-0 pt-3">Tài liệu / Slides</div>
+                <div class="card-body lesson-detail-frame">
+                    <iframe src="@Model.SlideEmbedUrl" title="@Model.Title" allowfullscreen></iframe>
+                </div>
+            </div>
+        }
+
+        @if (Model.ImageUrls.Any())
+        {
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white fw-semibold border-0 pt-3">Hình ảnh</div>
+                <div class="card-body">
+                    <div class="lesson-gallery">
+                        @foreach (var image in Model.ImageUrls)
+                        {
+                            <a href="@image" target="_blank" rel="noopener noreferrer">
+                                <img src="@image" alt="Lesson image" />
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/task-markdown.js"></script>
+}

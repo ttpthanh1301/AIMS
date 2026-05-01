@@ -5,6 +5,8 @@ public class QuizBankListVm
     public int Id { get; set; }
     public int CourseId { get; set; }
     public string CourseTitle { get; set; } = "";
+    public int? LessonId { get; set; }
+    public string? LessonTitle { get; set; }
     public string Title { get; set; } = "";
     public decimal PassScore { get; set; }
     public int? TimeLimit { get; set; }
@@ -50,6 +52,17 @@ public class QuestionOptionDetailVm
 public class CreateQuizBankRequest
 {
     public int CourseId { get; set; }
+    public int? LessonId { get; set; }
+    public string Title { get; set; } = "";
+    public decimal PassScore { get; set; } = 70;
+    public int? TimeLimit { get; set; }
+    public int MaxAttempts { get; set; } = 3;
+}
+
+public class UpdateQuizBankRequest
+{
+    public int CourseId { get; set; }
+    public int? LessonId { get; set; }
     public string Title { get; set; } = "";
     public decimal PassScore { get; set; } = 70;
     public int? TimeLimit { get; set; }

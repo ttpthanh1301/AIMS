@@ -1,0 +1,266 @@
+@using AIMS.ViewModels.TaskManagement
+@model TaskDetailVm
+@{
+    ViewData["Title"] = "Chỉnh sửa task";
+    var assignments = ViewBag.Assignments as List<AssignmentListVm> ?? new List<AssignmentListVm>();
+    var uploadImageUrl = Url.Action("UploadTaskImage", "Task", new { area = "Mentor" }) ?? "/Mentor/Task/UploadTaskImage";
+    var deadlineValue = Model.Deadline.ToString("yyyy-MM-ddTHH:mm");
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-task-edit.css" />
+}
+
+<div class="edit-task-page">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">
+                <i class="bi bi-pencil-square text-primary me-2"></i>Chỉnh sửa task
+            </h4>
+            <div class="text-muted small">Cập nhật tiêu đề, mô tả, link/ảnh, deadline và độ ưu tiên.</div>
+        </div>
+        <a asp-area="Mentor" asp-controller="Task" asp-action="TaskDetail" asp-route-taskId="@Model.Id" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left me-1"></i>Quay lại chi tiết
+        </a>
+    </div>
+
+    @if (TempData["Error"] is string error)
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <form id="editTaskForm" asp-area="Mentor" asp-controller="Task" asp-action="EditTask" method="post">
+        <input type="hidden" name="id" value="@Model.Id" />
+        <div class="edit-task-shell">
+            <div class="edit-task-main">
+                <input id="title" name="title" class="form-control edit-task-title" maxlength="300" required
+                       value="@Model.Title" placeholder="Nhập tiêu đề task" />
+                <div class="invalid-feedback">Vui lòng nhập tiêu đề task.</div>
+
+                <div class="task-editor mt-3">
+                    <div class="task-editor-toolbar" aria-label="Thanh công cụ mô tả">
+                        <button type="button" class="btn" data-wrap="" title="Định dạng văn bản"><span>Aa</span></button>
+                        <button type="button" class="btn" data-wrap="bold" title="In đậm"><i class="bi bi-type-bold"></i></button>
+                        <button type="button" class="btn" data-wrap="italic" title="In nghiêng"><i class="bi bi-type-italic"></i></button>
+                        <button type="button" class="btn" data-list="ul" title="Danh sách"><i class="bi bi-list-ul"></i></button>
+                        <button type="button" class="btn" data-list="ol" title="Danh sách số"><i class="bi bi-list-ol"></i></button>
+                        <button type="button" class="btn" data-insert="> " title="Trích dẫn"><i class="bi bi-quote"></i></button>
+                        <button type="button" class="btn" data-wrap="code" title="Mã nguồn"><i class="bi bi-code-slash"></i></button>
+                        <button type="button" class="btn" data-insert="| Thứ Hai | Thứ Ba | Thứ Tư | Thứ Năm | Thứ Sáu | Thứ Bảy | Chủ Nhật |\n| --- | --- | --- | --- | --- | --- | --- |\n|  |  |  | 1 | 2 | 3 | 4 |\n| 5 | 6 | 7 | 8 | 9 | 10 | 11 |\n| 12 | 13 | 14 | 15 | 16 | 17 | 18 |\n| 19 | 20 | 21 | 22 | 23 | 24 | 25 |\n" title="Bảng"><i class="bi bi-table"></i></button>
+                        <button type="button" class="btn" id="insertLinkBtn" title="Liên kết"><i class="bi bi-link-45deg"></i></button>
+                        <button type="button" class="btn" id="uploadImageBtn" title="Tải ảnh lên"><i class="bi bi-cloud-arrow-up"></i></button>
+                        <button type="button" class="btn" id="clearDescriptionBtn" title="Xóa mô tả"><i class="bi bi-trash"></i></button>
+                        <button type="button" class="btn ms-auto" id="previewBtn" title="Xem trước"><i class="bi bi-eye"></i></button>
+                    </div>
+                    <div class="task-editor-body">
+                        <textarea id="description" name="description" class="form-control" maxlength="2000"
+                                  placeholder="Nhập mô tả, link Figma, tài liệu, yêu cầu nghiệm thu...">@Model.Description</textarea>
+                        <div id="taskPreview" class="task-preview"></div>
+                    </div>
+                </div>
+                <input id="taskImageInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden />
+                <div id="uploadStatus" class="text-muted small mt-2"></div>
+            </div>
+
+            <aside class="edit-task-side">
+                <div class="task-property">
+                    <label class="form-label" for="assignmentDisplay">
+                        <i class="bi bi-person-badge"></i>Người phụ trách
+                    </label>
+                    <input id="assignmentDisplay" class="form-control" value="@Model.InternName" disabled />
+                </div>
+
+                <div class="task-property">
+                    <label class="form-label" for="deadline">
+                        <i class="bi bi-calendar2-event"></i>Deadline
+                    </label>
+                    <input id="deadline" name="deadline" type="datetime-local" class="form-control" value="@deadlineValue" required />
+                    <div class="invalid-feedback">Vui lòng chọn deadline.</div>
+                </div>
+
+                <div class="task-property">
+                    <label class="form-label" for="priority">
+                        <i class="bi bi-flag"></i>Độ ưu tiên
+                    </label>
+                    <select id="priority" name="priority" class="form-select">
+                        <option value="MEDIUM" selected="@(Model.Priority == "MEDIUM")">Trung bình</option>
+                        <option value="HIGH" selected="@(Model.Priority == "HIGH")">Cao</option>
+                        <option value="LOW" selected="@(Model.Priority == "LOW")">Thấp</option>
+                    </select>
+                </div>
+
+                <div class="task-property">
+                    <label class="form-label" for="statusDisplay">
+                        <i class="bi bi-kanban"></i>Trạng thái
+                    </label>
+                    <input id="statusDisplay" class="form-control" value="@Model.Status" disabled />
+                </div>
+
+                <div class="task-property">
+                    <label class="form-label" for="estimatedHours">
+                        <i class="bi bi-hourglass-split"></i>Giờ ước tính
+                    </label>
+                    <input id="estimatedHours" name="estimatedHours" type="number" min="0" step="0.25" class="form-control" value="@Model.EstimatedHours" />
+                </div>
+            </aside>
+        </div>
+
+        <div class="edit-task-actions">
+            <a asp-area="Mentor" asp-controller="Task" asp-action="TaskDetail" asp-route-taskId="@Model.Id" class="btn btn-light border">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script src="~/js/task-markdown.js"></script>
+<script>
+    const descriptionEl = document.getElementById('description');
+    const previewEl = document.getElementById('taskPreview');
+    const previewBtn = document.getElementById('previewBtn');
+    const imageInput = document.getElementById('taskImageInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const form = document.getElementById('editTaskForm');
+    let previewVisible = false;
+
+    document.querySelectorAll('[data-wrap]').forEach(button => {
+        button.addEventListener('click', () => {
+            const mode = button.dataset.wrap;
+            if (!mode) return;
+            const wrappers = {
+                bold: ['**', '**'],
+                italic: ['*', '*'],
+                code: ['`', '`']
+            };
+            wrapSelection(...wrappers[mode]);
+        });
+    });
+
+    document.querySelectorAll('[data-insert]').forEach(button => {
+        button.addEventListener('click', () => insertAtCursor(button.dataset.insert));
+    });
+
+    document.querySelectorAll('[data-list]').forEach(button => {
+        button.addEventListener('click', () => prefixSelectionAsList(button.dataset.list));
+    });
+
+    document.getElementById('insertLinkBtn').addEventListener('click', () => {
+        const url = prompt('Nhập URL');
+        if (!url) return;
+        const text = getSelectedText() || 'Link';
+        replaceSelection(`[${text}](${url})`);
+    });
+
+    document.getElementById('clearDescriptionBtn').addEventListener('click', () => {
+        descriptionEl.value = '';
+        descriptionEl.focus();
+        renderPreview();
+    });
+
+    document.getElementById('uploadImageBtn').addEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', async () => {
+        const file = imageInput.files?.[0];
+        if (!file) return;
+
+        await uploadAndInsertImage(file);
+        imageInput.value = '';
+    });
+
+    descriptionEl?.addEventListener('paste', async event => {
+        const files = Array.from(event.clipboardData?.files || [])
+            .filter(file => file.type.startsWith('image/'));
+
+        if (files.length === 0) {
+            return;
+        }
+
+        event.preventDefault();
+        for (const file of files) {
+            await uploadAndInsertImage(file);
+        }
+    });
+
+    previewBtn.addEventListener('click', () => {
+        previewVisible = !previewVisible;
+        previewBtn.classList.toggle('active', previewVisible);
+        descriptionEl.style.display = previewVisible ? 'none' : 'block';
+        previewEl.style.display = previewVisible ? 'block' : 'none';
+        renderPreview();
+    });
+
+    descriptionEl?.addEventListener('input', renderPreview);
+
+    form?.addEventListener('submit', event => {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        form.classList.add('was-validated');
+    });
+
+    function getSelectedText() {
+        return descriptionEl.value.substring(descriptionEl.selectionStart, descriptionEl.selectionEnd);
+    }
+
+    function replaceSelection(text) {
+        const start = descriptionEl.selectionStart;
+        const end = descriptionEl.selectionEnd;
+        descriptionEl.setRangeText(text, start, end, 'end');
+        descriptionEl.focus();
+        renderPreview();
+    }
+
+    function insertAtCursor(text) {
+        replaceSelection(text);
+    }
+
+    function wrapSelection(before, after) {
+        const selected = getSelectedText() || 'nội dung';
+        replaceSelection(`${before}${selected}${after}`);
+    }
+
+    function prefixSelectionAsList(type) {
+        const start = descriptionEl.selectionStart;
+        const end = descriptionEl.selectionEnd;
+        const selected = descriptionEl.value.substring(start, end) || 'Nội dung';
+        const lines = selected.split(/\r?\n/).filter(line => line.trim().length > 0);
+        const formatted = lines
+            .map((line, index) => type === 'ol' ? `${index + 1}. ${line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')}` : `- ${line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')}`)
+            .join('\n');
+
+        descriptionEl.setRangeText(formatted, start, end, 'end');
+        descriptionEl.focus();
+        renderPreview();
+    }
+
+    async function uploadAndInsertImage(file) {
+        const formData = new FormData();
+        formData.append('image', file);
+        uploadStatus.textContent = 'Đang tải ảnh lên...';
+
+        try {
+            const response = await fetch('@uploadImageUrl', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Tải ảnh thất bại');
+            }
+
+            insertAtCursor(`![${file.name || 'image'}](${data.url})`);
+            uploadStatus.textContent = 'Đã tải ảnh và chèn URL vào mô tả.';
+        } catch (error) {
+            uploadStatus.textContent = error.message || 'Tải ảnh thất bại';
+        }
+    }
+
+    function renderPreview() {
+        if (!previewEl) return;
+        previewEl.innerHTML = window.taskMarkdown.render(descriptionEl.value || '');
+    }
+</script>
+}

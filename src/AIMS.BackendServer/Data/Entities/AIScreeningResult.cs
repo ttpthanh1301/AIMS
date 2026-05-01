@@ -8,6 +8,8 @@ public class AIScreeningResult
     public int? Ranking { get; set; }
     public string? KeywordsMatched { get; set; }
     public string? KeywordsMissing { get; set; }
+    public string ProcessingStatus { get; set; } = "Pending";
+    public string? ErrorMessage { get; set; }
     public DateTime ScreenedAt { get; set; } = DateTime.UtcNow;
     public string? ReviewedByHRId { get; set; }
 

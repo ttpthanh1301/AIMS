@@ -1,0 +1,263 @@
+@model List<AIMS.ViewModels.LMS.MentorCourseProgressVm>
+@{
+    ViewData["Title"] = "Tiến độ học tập Mentor";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var courses = Model ?? new List<AIMS.ViewModels.LMS.MentorCourseProgressVm>();
+    var totalCourses = (int)(ViewBag.TotalCourses ?? 0);
+    var totalInterns = (int)(ViewBag.TotalInterns ?? 0);
+    var completedInterns = (int)(ViewBag.CompletedInterns ?? 0);
+    var averageCompletion = (decimal)(ViewBag.AverageCompletion ?? 0m);
+    var topCourses = courses
+        .OrderByDescending(c => c.AverageCompletionPercent)
+        .ThenByDescending(c => c.CompletedInterns)
+        .Take(3)
+        .ToList();
+}
+
+<div class="mentor-progress-dashboard">
+    <section class="mentor-progress-hero">
+        <div class="mentor-progress-hero__content">
+            <span class="mentor-progress-kicker">
+                <i class="fas fa-chart-line"></i>
+                Theo dõi tiến độ
+            </span>
+
+            <h1>Tiến độ học tập của Intern</h1>
+
+            <p>
+                Tổng hợp các khóa học mà bạn đang theo dõi, tỷ lệ hoàn thành trung bình
+                và mức độ tham gia của intern theo từng khóa.
+            </p>
+
+            @if (!string.IsNullOrEmpty(ViewBag.Message))
+            {
+                <div class="alert alert-warning mentor-progress-alert mb-0" role="alert">
+                    <i class="fas fa-exclamation-circle me-2"></i>@ViewBag.Message
+                </div>
+            }
+        </div>
+
+        <div class="mentor-progress-summary">
+            <div class="mentor-summary-card">
+                <span class="mentor-summary-card__label">Tỷ lệ trung bình</span>
+                <strong class="mentor-summary-card__value">@string.Format("{0:F0}%", averageCompletion)</strong>
+                <span class="mentor-summary-card__meta">Toàn bộ khóa học đang theo dõi</span>
+            </div>
+
+            <div class="mentor-summary-card">
+                <span class="mentor-summary-card__label">Intern hoàn thành</span>
+                <strong class="mentor-summary-card__value">@completedInterns</strong>
+                <span class="mentor-summary-card__meta">Đạt 100% tiến độ</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="mentor-progress-metrics">
+        <article class="mentor-metric-card">
+            <span class="mentor-metric-card__icon bg-primary-subtle text-primary">
+                <i class="fas fa-book"></i>
+            </span>
+            <div>
+                <div class="mentor-metric-card__label">Tổng khóa học</div>
+                <div class="mentor-metric-card__value">@totalCourses</div>
+            </div>
+        </article>
+
+        <article class="mentor-metric-card">
+            <span class="mentor-metric-card__icon bg-info-subtle text-info">
+                <i class="fas fa-users"></i>
+            </span>
+            <div>
+                <div class="mentor-metric-card__label">Tổng intern</div>
+                <div class="mentor-metric-card__value">@totalInterns</div>
+            </div>
+        </article>
+
+        <article class="mentor-metric-card">
+            <span class="mentor-metric-card__icon bg-success-subtle text-success">
+                <i class="fas fa-check-circle"></i>
+            </span>
+            <div>
+                <div class="mentor-metric-card__label">Đã hoàn thành</div>
+                <div class="mentor-metric-card__value">@completedInterns</div>
+            </div>
+        </article>
+
+        <article class="mentor-metric-card">
+            <span class="mentor-metric-card__icon bg-warning-subtle text-warning">
+                <i class="fas fa-signal"></i>
+            </span>
+            <div>
+                <div class="mentor-metric-card__label">Trung bình tiến độ</div>
+                <div class="mentor-metric-card__value">@string.Format("{0:F0}%", averageCompletion)</div>
+            </div>
+        </article>
+    </section>
+
+    @if (courses.Any())
+    {
+        <section class="mentor-progress-layout">
+            <div class="mentor-progress-main card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="mentor-section-head">
+                        <div>
+                            <h2>Danh sách khóa học</h2>
+                            <p>Chi tiết số lượng intern, tỷ lệ hoàn thành và trạng thái từng khóa học.</p>
+                        </div>
+
+                        <a href="/Mentor/Progress/Courses" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-2"></i>Xem tất cả
+                        </a>
+                    </div>
+
+                    <div class="table-responsive mentor-table-wrapper">
+                        <table class="table mentor-course-table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Khóa học</th>
+                                    <th>Cấp độ</th>
+                                    <th class="text-center">Intern</th>
+                                    <th class="text-center">Hoàn thành</th>
+                                    <th>Tiến độ</th>
+                                    <th class="text-center">Trạng thái</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var course in courses)
+                                {
+                                    var progress = Math.Round(course.AverageCompletionPercent, 0, MidpointRounding.AwayFromZero);
+                                    var progressWidthClass = $"w-pct-{Math.Clamp((int)progress, 0, 100)}";
+                                    var progressColor = progress >= 100 ? "bg-success" : progress >= 50 ? "bg-warning" : "bg-primary";
+                                    var status = progress == 0 ? "Chưa bắt đầu" : (progress >= 100 ? "Hoàn thành" : "Đang học");
+                                    var statusClass = progress == 0 ? "bg-secondary-subtle text-secondary" : (progress >= 100 ? "bg-success-subtle text-success" : "bg-primary-subtle text-primary");
+
+                                    <tr>
+                                        <td class="mentor-course-cell" data-label="Khóa học">
+                                            <div class="mentor-course-title">@course.CourseTitle</div>
+                                        </td>
+
+                                        <td data-label="Cấp độ">
+                                            <span class="mentor-pill mentor-pill--neutral">@course.Level</span>
+                                        </td>
+
+                                        <td class="text-end" data-label="Intern">
+                                            <span class="mentor-stat-number">@course.TotalInterns</span>
+                                        </td>
+
+                                        <td class="text-end" data-label="Hoàn thành">
+                                            <span class="mentor-stat-number text-success">@course.CompletedInterns</span>
+                                        </td>
+
+                                        <td class="mentor-progress-cell" data-label="Tiến độ">
+                                            <div class="mentor-inline-progress">
+                                                <div class="progress">
+                                                    <div class="progress-bar @progressColor @progressWidthClass" role="progressbar"></div>
+                                                </div>
+                                                <span>@string.Format("{0:F0}%", progress)</span>
+                                            </div>
+                                        </td>
+
+                                        <td class="text-center" data-label="Trạng thái">
+                                            <span class="mentor-pill @statusClass">@status</span>
+                                        </td>
+
+                                        <td class="text-end" data-label="">
+                                            <a href="/Mentor/Progress/CourseDetail/@course.CourseId" class="btn btn-sm btn-primary mentor-detail-btn">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="mentor-progress-side">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="mentor-section-head mentor-section-head--stacked">
+                            <div>
+                                <h2>Khóa học nổi bật</h2>
+                                <p>Những khóa học có tiến độ trung bình cao nhất.</p>
+                            </div>
+                        </div>
+
+                        <div class="mentor-highlight-list">
+                            @foreach (var course in topCourses)
+                            {
+                                var progress = Math.Round(course.AverageCompletionPercent, 0, MidpointRounding.AwayFromZero);
+                                var progressWidthClass = $"w-pct-{Math.Clamp((int)progress, 0, 100)}";
+
+                                <div class="mentor-highlight-item">
+                                    <div class="mentor-highlight-item__top">
+                                        <strong>@course.CourseTitle</strong>
+                                        <span>@string.Format("{0:F0}%", progress)</span>
+                                    </div>
+
+                                    <div class="progress mentor-highlight-progress">
+                                        <div class="progress-bar @(progress >= 100 ? "bg-success" : "bg-primary") @progressWidthClass" role="progressbar"></div>
+                                    </div>
+
+                                    <div class="mentor-highlight-item__meta">
+                                        <span>@course.TotalInterns intern</span>
+                                        <span>@course.CompletedInterns hoàn thành</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="mentor-section-head mentor-section-head--stacked">
+                            <div>
+                                <h2>Tổng quan nhanh</h2>
+                                <p>Mức độ phân bố tiến độ hiện tại.</p>
+                            </div>
+                        </div>
+
+                        <div class="mentor-overview-list">
+                            <div class="mentor-overview-row">
+                                <span>Khóa học đang học</span>
+                                <strong>@courses.Count(c => c.AverageCompletionPercent > 0 && c.AverageCompletionPercent < 100)</strong>
+                            </div>
+
+                            <div class="mentor-overview-row">
+                                <span>Khóa học hoàn thành</span>
+                                <strong>@courses.Count(c => c.AverageCompletionPercent >= 100)</strong>
+                            </div>
+
+                            <div class="mentor-overview-row">
+                                <span>Khóa học chưa bắt đầu</span>
+                                <strong>@courses.Count(c => c.AverageCompletionPercent <= 0)</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </section>
+    }
+    else
+    {
+        <section class="card border-0 shadow-sm mentor-empty-card">
+            <div class="card-body mentor-empty-state">
+                <div class="mentor-empty-state__icon">
+                    <i class="fas fa-book-open"></i>
+                </div>
+
+                <h2>Chưa có dữ liệu khóa học</h2>
+                <p>Hiện chưa có intern nào được ghi nhận trong các khóa học mà bạn quản lý.</p>
+            </div>
+        </section>
+    }
+</div>
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-progress-dashboard.css" />
+}

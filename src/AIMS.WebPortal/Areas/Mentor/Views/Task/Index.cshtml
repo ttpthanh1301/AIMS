@@ -1,180 +1,404 @@
-@model List<AIMS.ViewModels.TaskManagement.TaskListVm>
+@using AIMS.ViewModels.TaskManagement
+@model List<TaskVm>
 @{
     ViewData["Title"] = "Kanban Board";
-    var assignments = ViewBag.Assignments
-        as List<AIMS.ViewModels.TaskManagement.AssignmentListVm>
-        ?? new();
-
-    // ⭐ PascalCase vì typed ViewModel
-    var todo       = Model.Where(t => t.Status == "TODO").ToList();
-    var inProgress = Model.Where(t => t.Status == "IN_PROGRESS").ToList();
-    var done       = Model.Where(t => t.Status == "DONE").ToList();
+    var tasks = Model ?? new List<TaskVm>();
+    var todoTasks = tasks.Where(t => t.Status == "TODO").ToList();
+    var inProgressTasks = tasks.Where(t => t.Status == "IN_PROGRESS").ToList();
+    var doneTasks = tasks.Where(t => t.Status == "DONE").ToList();
+    var updateStatusUrl = Url.Action("UpdateStatus", "Task", new { area = "Mentor" }) ?? "/Mentor/Task/UpdateStatus";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="fw-bold mb-0">
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-task-board.css" />
+}
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+    <h5 class="fw-bold">
         <i class="bi bi-kanban text-primary me-2"></i>Kanban Board
     </h5>
-    <button class="btn btn-primary"
-            data-bs-toggle="modal"
-            data-bs-target="#createTaskModal">
-        <i class="bi bi-plus-lg me-1"></i>Giao task
-    </button>
+    <p class="text-muted small">
+        Kéo task giữa các cột để thay đổi trạng thái
+    </p>
+    </div>
+    <a asp-area="Mentor" asp-controller="Task" asp-action="CreateTask" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Tạo task
+    </a>
 </div>
 
-<div class="row g-3">
-    @{
-        var columns = new[]
-        {
-            ("TODO",        "secondary", todo,       "TODO"),
-            ("IN PROGRESS", "primary",   inProgress, "IN_PROGRESS"),
-            ("DONE",        "success",   done,       "DONE"),
-        };
-    }
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
 
-    @foreach (var (colTitle, colColor, colTasks, colStatus) in columns)
-    {
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-@colColor text-white fw-semibold">
-                    @colTitle
-                    <span class="badge bg-white text-@colColor ms-2">
-                        @colTasks.Count
-                    </span>
+<div class="kanban-container">
+    <!-- TODO Column -->
+    <div class="kanban-column todo">
+        <h6>
+            <span>
+                <i class="bi bi-circle me-2"></i>Chưa làm
+            </span>
+            <span class="task-counter">@todoTasks.Count</span>
+        </h6>
+        <div class="task-list" data-status="TODO">
+            @if (todoTasks.Count == 0)
+            {
+                <div class="no-tasks">
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
                 </div>
-                <div class="card-body p-2" style="min-height:300px">
-                    @foreach (var task in colTasks)
-                    {
-                        <div class="card mb-2 border-0 shadow-sm task-card"
-                             data-id="@task.Id"
-                             data-status="@task.Status">
-                            <div class="card-body p-3">
-                                <div class="fw-semibold mb-1">@task.Title</div>
-                                <div class="d-flex gap-1 mb-2">
-                                    <span class="badge rounded-pill @(task.Priority == "HIGH" ? "bg-danger" : task.Priority == "MEDIUM" ? "bg-warning text-dark" : "bg-info")"
-                                          style="font-size:.7rem">
-                                        @task.Priority
-                                    </span>
-                                    @if (task.IsOverdue)
-                                    {
-                                        <span class="badge bg-danger rounded-pill"
-                                              style="font-size:.7rem">OVERDUE</span>
-                                    }
-                                </div>
-                                <div class="text-muted" style="font-size:.78rem">
-                                    <i class="bi bi-person me-1"></i>@task.InternName
-                                </div>
-                                <div class="text-muted" style="font-size:.78rem">
-                                    <i class="bi bi-calendar me-1"></i>
-                                    @task.Deadline.ToString("dd/MM/yyyy")
-                                </div>
-                                <div class="mt-2 d-flex gap-1">
-                                    @if (task.Status != "TODO")
-                                    {
-                                        <button class="btn btn-sm btn-outline-secondary"
-                                                onclick="moveTask(@task.Id, 'prev')">
-                                            ◀
-                                        </button>
-                                    }
-                                    @if (task.Status != "DONE")
-                                    {
-                                        <button class="btn btn-sm btn-outline-primary ms-auto"
-                                                onclick="moveTask(@task.Id, 'next')">
-                                            ▶
-                                        </button>
-                                    }
-                                </div>
+            }
+            else
+            {
+                @foreach (var task in todoTasks.OrderBy(t => t.Deadline))
+                {
+                    <div class="task-card @(task.IsOverdue ? "overdue" : "") @(task.Priority == "HIGH" ? "high-priority" : "")" 
+                         data-task-id="@task.Id"
+                         data-task-title="@task.Title"
+                         data-priority="@task.Priority"
+                         data-is-overdue="@(task.IsOverdue ? "true" : "false")"
+                         title="@task.Title">
+                        <div class="task-header">
+                            <div class="task-title">
+                                <a href="@Url.Action("TaskDetail", "Task", new { area = "Mentor", taskId = task.Id })" class="text-decoration-none">
+                                    @task.Title
+                                </a>
+                            </div>
+                            <div class="task-header-actions">
+                                <span class="task-priority @task.Priority">
+                                    @task.Priority
+                                </span>
+                                <a href="@Url.Action("EditTask", "Task", new { area = "Mentor", taskId = task.Id })" class="task-edit-link" title="Chỉnh sửa task">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                                <form asp-area="Mentor" asp-controller="Task" asp-action="DeleteTask" method="post" class="task-delete-form"
+                                      onsubmit="return confirm('Bạn chắc chắn muốn xóa task này? Toàn bộ lịch sử và timesheet liên quan sẽ bị xóa.');">
+                                    <input type="hidden" name="taskId" value="@task.Id" />
+                                    <button type="submit" class="task-delete-btn" title="Xóa task">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             </div>
                         </div>
-                    }
-                </div>
-            </div>
+                        <div class="task-meta">
+                            <span class="task-intern">
+                                <i class="bi bi-person-circle"></i>
+                                @task.InternName
+                            </span>
+                            <span class="task-deadline @(task.IsOverdue ? "overdue" : "")">
+                                <i class="bi bi-calendar2"></i>
+                                @task.Deadline.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                    </div>
+                }
+            }
         </div>
-    }
-</div>
+    </div>
 
-<!-- Modal tạo task -->
-<div class="modal fade" id="createTaskModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold">Giao task mới</h5>
-                <button type="button" class="btn-close"
-                        data-bs-dismiss="modal"></button>
-            </div>
-            <form asp-action="Create" method="post">
-                @Html.AntiForgeryToken()
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Intern</label>
-                        <select name="assignmentId" class="form-select" required>
-                            @foreach (var a in assignments)
-                            {
-                                <option value="@a.Id">@a.InternName</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Tiêu đề task</label>
-                        <input name="title" class="form-control" required />
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold">Priority</label>
-                            <select name="priority" class="form-select">
-                                <option value="LOW">Low</option>
-                                <option value="MEDIUM" selected>Medium</option>
-                                <option value="HIGH">High</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold">Deadline</label>
-                            <input name="deadline" type="date"
-                                   class="form-control" required />
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Giờ ước tính</label>
-                        <input name="estimatedHours" type="number"
-                               step="0.5" class="form-control" placeholder="8" />
+    <!-- IN_PROGRESS Column -->
+    <div class="kanban-column progress">
+        <h6>
+            <span>
+                <i class="bi bi-play-circle me-2"></i>Đang làm
+            </span>
+            <span class="task-counter">@inProgressTasks.Count</span>
+        </h6>
+        <div class="task-list" data-status="IN_PROGRESS">
+            @if (inProgressTasks.Count == 0)
+            {
+                <div class="no-tasks">
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary"
-                            data-bs-dismiss="modal">Hủy</button>
-                    <button type="submit" class="btn btn-primary">Tạo task</button>
+            }
+            else
+            {
+                @foreach (var task in inProgressTasks.OrderBy(t => t.Deadline))
+                {
+                    <div class="task-card @(task.IsOverdue ? "overdue" : "")" 
+                         data-task-id="@task.Id"
+                         data-task-title="@task.Title"
+                         data-priority="@task.Priority"
+                         data-is-overdue="@(task.IsOverdue ? "true" : "false")"
+                         title="@task.Title">
+                        <div class="task-header">
+                            <div class="task-title">
+                                <a href="@Url.Action("TaskDetail", "Task", new { area = "Mentor", taskId = task.Id })" class="text-decoration-none">
+                                    @task.Title
+                                </a>
+                            </div>
+                            <div class="task-header-actions">
+                                <span class="task-priority @task.Priority">
+                                    @task.Priority
+                                </span>
+                                <a href="@Url.Action("EditTask", "Task", new { area = "Mentor", taskId = task.Id })" class="task-edit-link" title="Chỉnh sửa task">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                                <form asp-area="Mentor" asp-controller="Task" asp-action="DeleteTask" method="post" class="task-delete-form"
+                                      onsubmit="return confirm('Bạn chắc chắn muốn xóa task này? Toàn bộ lịch sử và timesheet liên quan sẽ bị xóa.');">
+                                    <input type="hidden" name="taskId" value="@task.Id" />
+                                    <button type="submit" class="task-delete-btn" title="Xóa task">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span class="task-intern">
+                                <i class="bi bi-person-circle"></i>
+                                @task.InternName
+                            </span>
+                            <span class="task-deadline @(task.IsOverdue ? "overdue" : "")">
+                                <i class="bi bi-calendar2"></i>
+                                @task.Deadline.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- DONE Column -->
+    <div class="kanban-column done">
+        <h6>
+            <span>
+                <i class="bi bi-check-circle me-2"></i>Hoàn thành
+            </span>
+            <span class="task-counter">@doneTasks.Count</span>
+        </h6>
+        <div class="task-list" data-status="DONE">
+            @if (doneTasks.Count == 0)
+            {
+                <div class="no-tasks">
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
                 </div>
-            </form>
+            }
+            else
+            {
+                @foreach (var task in doneTasks.OrderByDescending(t => t.Deadline))
+                {
+                    <div class="task-card" 
+                         data-task-id="@task.Id"
+                         data-task-title="@task.Title"
+                         data-priority="@task.Priority"
+                         data-is-overdue="@(task.IsOverdue ? "true" : "false")"
+                         title="Kéo về TODO nếu cần chỉnh sửa">
+                        <div class="task-header">
+                            <div class="task-title">
+                                <i class="bi bi-check-circle text-success me-1"></i>
+                                <s>@task.Title</s>
+                            </div>
+                            <div class="task-header-actions">
+                                <span class="task-priority @task.Priority">
+                                    @task.Priority
+                                </span>
+                                <a href="@Url.Action("EditTask", "Task", new { area = "Mentor", taskId = task.Id })" class="task-edit-link" title="Chỉnh sửa task">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                                <form asp-area="Mentor" asp-controller="Task" asp-action="DeleteTask" method="post" class="task-delete-form"
+                                      onsubmit="return confirm('Bạn chắc chắn muốn xóa task này? Toàn bộ lịch sử và timesheet liên quan sẽ bị xóa.');">
+                                    <input type="hidden" name="taskId" value="@task.Id" />
+                                    <button type="submit" class="task-delete-btn" title="Xóa task">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            <span class="task-intern">
+                                <i class="bi bi-person-circle"></i>
+                                @task.InternName
+                            </span>
+                            <span class="task-deadline">
+                                <i class="bi bi-calendar2"></i>
+                                @task.Deadline.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                    </div>
+                }
+            }
         </div>
     </div>
 </div>
 
 @section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <script>
-const statusFlow = ['TODO', 'IN_PROGRESS', 'DONE'];
+    const lists = document.querySelectorAll('.task-list');
 
-async function moveTask(id, direction) {
-    const card    = document.querySelector(`.task-card[data-id="${id}"]`);
-    const current = card.dataset.status;
-    const idx     = statusFlow.indexOf(current);
-    const next    = direction === 'next'
-        ? statusFlow[idx + 1]
-        : statusFlow[idx - 1];
+    lists.forEach(list => {
+        new Sortable(list, {
+            group: 'mentor-tasks',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            dragClass: 'dragging',
+            draggable: '.task-card',
+            onEnd: async (evt) => {
+                const oldStatus = evt.from.dataset.status;
+                const newStatus = evt.to.dataset.status;
 
-    if (!next) return;
+                if (oldStatus === newStatus) {
+                    return;
+                }
 
-    const token = document.querySelector('[name=__RequestVerificationToken]')?.value ?? '';
+                const taskId = parseInt(evt.item.dataset.taskId, 10);
+                evt.item.style.opacity = '0.6';
+                syncTaskCardAppearance(evt.item, newStatus);
+                refreshBoard();
 
-    await fetch('/Mentor/Task/UpdateStatus', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'RequestVerificationToken': token,
-        },
-        body: JSON.stringify({ id, status: next }),
+                try {
+                    const res = await fetch('@updateStatusUrl', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            id: taskId,
+                            status: newStatus,
+                            note: `Cập nhật trạng thái từ Kanban board (${new Date().toLocaleString('vi-VN')})`
+                        })
+                    });
+
+                    const data = await parseResponse(res);
+                    evt.item.style.opacity = '1';
+
+                    if (!res.ok) {
+                        throw new Error(data.message || 'Cập nhật thất bại');
+                    }
+
+                    showToast(data.message || 'Cập nhật trạng thái thành công', 'success');
+                } catch (err) {
+                    console.error('Error:', err);
+                    evt.item.style.opacity = '1';
+                    showToast(err.message || 'Có lỗi xảy ra, vui lòng thử lại', 'danger');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            }
+        });
     });
 
-    location.reload();
-}
+    function refreshBoard() {
+        document.querySelectorAll('.task-list').forEach(refreshColumn);
+    }
+
+    function syncTaskCardAppearance(card, status) {
+        const titleEl = card.querySelector('.task-title');
+        const deadlineEl = card.querySelector('.task-deadline');
+        const title = card.dataset.taskTitle || titleEl?.textContent?.trim() || '';
+        const priority = card.dataset.priority || '';
+        const isOverdue = card.dataset.isOverdue === 'true';
+
+        card.classList.remove('overdue', 'high-priority');
+        deadlineEl?.classList.remove('overdue');
+
+        if (!titleEl) {
+            return;
+        }
+
+        if (status === 'DONE') {
+            titleEl.replaceChildren();
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-check-circle text-success me-1';
+
+            const strike = document.createElement('s');
+            strike.textContent = title;
+
+            titleEl.append(icon, strike);
+            card.title = 'Kéo về TODO nếu cần chỉnh sửa';
+            return;
+        }
+
+        titleEl.textContent = title;
+        card.title = title;
+
+        if (status === 'TODO') {
+            if (priority === 'HIGH') {
+                card.classList.add('high-priority');
+            }
+
+            if (isOverdue) {
+                card.classList.add('overdue');
+                deadlineEl?.classList.add('overdue');
+            }
+            return;
+        }
+
+        if (status === 'IN_PROGRESS' && isOverdue) {
+            card.classList.add('overdue');
+            deadlineEl?.classList.add('overdue');
+        }
+    }
+
+    function refreshColumn(list) {
+        const cards = list.querySelectorAll(':scope > .task-card');
+        const placeholder = list.querySelector(':scope > .no-tasks');
+
+        if (cards.length === 0) {
+            if (!placeholder) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'no-tasks';
+                emptyState.innerHTML = `
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
+                `;
+                list.appendChild(emptyState);
+            }
+        } else if (placeholder) {
+            placeholder.remove();
+        }
+
+        const counter = list.closest('.kanban-column')?.querySelector('.task-counter');
+        if (counter) {
+            counter.textContent = cards.length.toString();
+        }
+    }
+
+    async function parseResponse(res) {
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            return {};
+        }
+
+        try {
+            return await res.json();
+        } catch {
+            return {};
+        }
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} position-fixed bottom-0 end-0 m-3`;
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
 </script>
 }

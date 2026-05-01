@@ -4,8 +4,7 @@ using AIMS.ViewModels.LMS;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
+using System.Text.Json;
 
 using AIMS.BackendServer.Extensions;
 
@@ -68,6 +67,33 @@ public class CoursesController : ControllerBase
         return Ok(result);
     }
 
+    // GET /api/courses/{id}/enrollments
+    // Mentor/Admin xem danh sách intern đã đăng ký và tỉ lệ hoàn thành
+    [HttpGet("{id}/enrollments")]
+    [Authorize(Roles = "Mentor,Admin")]
+    public async Task<IActionResult> GetEnrollmentsForCourse(int id)
+    {
+        var courseExists = await _context.Courses.AnyAsync(c => c.Id == id);
+        if (!courseExists)
+            return NotFound(new { message = $"Course #{id} không tồn tại." });
+
+        var enrollments = await _context.Enrollments
+            .Include(e => e.InternUser)
+            .Where(e => e.CourseId == id)
+            .OrderByDescending(e => e.EnrollDate)
+            .Select(e => new
+            {
+                e.Id,
+                e.InternUserId,
+                InternName = e.InternUser.FirstName + " " + e.InternUser.LastName,
+                e.CompletionPercent,
+                e.EnrollDate,
+                e.CompletedDate,
+            })
+            .ToListAsync();
+
+        return Ok(new { CourseId = id, Enrollments = enrollments });
+    }
     // ─────────────────────────────────────────────────────────
     // GET /api/courses/{id}  — Trả về cả cây Chapters + Lessons
     // ─────────────────────────────────────────────────────────
@@ -107,15 +133,7 @@ public class CoursesController : ControllerBase
                 CourseId = ch.CourseId,
                 Title = ch.Title,
                 SortOrder = ch.SortOrder,
-                Lessons = ch.Lessons.Select(l => new LessonSummaryVm
-                {
-                    Id = l.Id,
-                    Title = l.Title,
-                    LessonType = l.LessonType,
-                    DurationMinutes = l.DurationMinutes,
-                    SortOrder = l.SortOrder,
-                    IsRequired = l.IsRequired,
-                }).ToList(),
+                Lessons = ch.Lessons.Select(ToLessonSummaryVm).ToList(),
             }).ToList(),
         });
     }
@@ -143,7 +161,7 @@ public class CoursesController : ControllerBase
             Description = request.Description,
             ThumbnailUrl = request.ThumbnailUrl,
             Level = request.Level.ToUpper(),
-            IsPublished = false,
+            IsPublished = request.IsPublished,
             CreateDate = DateTime.UtcNow,
             CreatedByUserId = userId,
         };
@@ -214,6 +232,9 @@ public class CoursesController : ControllerBase
             .Include(ch => ch.Lessons)
             .Where(ch => ch.CourseId == courseId)
             .OrderBy(ch => ch.SortOrder)
+            .ToListAsync();
+
+        var result = chapters
             .Select(ch => new ChapterVm
             {
                 Id = ch.Id,
@@ -222,19 +243,12 @@ public class CoursesController : ControllerBase
                 SortOrder = ch.SortOrder,
                 Lessons = ch.Lessons
                     .OrderBy(l => l.SortOrder)
-                    .Select(l => new LessonSummaryVm
-                    {
-                        Id = l.Id,
-                        Title = l.Title,
-                        LessonType = l.LessonType,
-                        DurationMinutes = l.DurationMinutes,
-                        SortOrder = l.SortOrder,
-                        IsRequired = l.IsRequired,
-                    }).ToList(),
+                    .Select(ToLessonSummaryVm)
+                    .ToList(),
             })
-            .ToListAsync();
+            .ToList();
 
-        return Ok(chapters);
+        return Ok(result);
     }
 
     // POST /api/courses/{courseId}/chapters
@@ -305,5 +319,56 @@ public class CoursesController : ControllerBase
         _context.CourseChapters.Remove(chapter);
         await _context.SaveChangesAsync();
         return Ok(new { message = "Đã xóa chapter." });
+    }
+
+    private static LessonSummaryVm ToLessonSummaryVm(Lesson lesson)
+    {
+        var content = ParseLessonContent(lesson.ContentUrl);
+        return new LessonSummaryVm
+        {
+            Id = lesson.Id,
+            Title = lesson.Title,
+            LessonType = lesson.LessonType,
+            ContentUrl = lesson.ContentUrl,
+            Description = content.Description,
+            VideoUrl = content.VideoUrl,
+            VideoEmbedUrl = content.VideoEmbedUrl,
+            SlideUrl = content.SlideUrl,
+            SlideEmbedUrl = content.SlideEmbedUrl,
+            ImageUrls = content.ImageUrls,
+            DurationMinutes = lesson.DurationMinutes,
+            SortOrder = lesson.SortOrder,
+            IsRequired = lesson.IsRequired,
+        };
+    }
+
+    private static LessonContentPayload ParseLessonContent(string? contentUrl)
+    {
+        if (string.IsNullOrWhiteSpace(contentUrl))
+            return new LessonContentPayload();
+
+        try
+        {
+            var payload = JsonSerializer.Deserialize<LessonContentPayload>(contentUrl, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            }) ?? new LessonContentPayload();
+            payload.ImageUrls ??= new();
+            return payload;
+        }
+        catch
+        {
+            return new LessonContentPayload { Description = contentUrl };
+        }
+    }
+
+    private class LessonContentPayload
+    {
+        public string? Description { get; set; }
+        public string? VideoUrl { get; set; }
+        public string? VideoEmbedUrl { get; set; }
+        public string? SlideUrl { get; set; }
+        public string? SlideEmbedUrl { get; set; }
+        public List<string> ImageUrls { get; set; } = new();
     }
 }

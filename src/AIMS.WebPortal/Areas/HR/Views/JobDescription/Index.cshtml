@@ -1,6 +1,9 @@
+@model IReadOnlyList<AIMS.ViewModels.Recruitment.JobDescriptionVm>
+
 @{
     ViewData["Title"] = "Job Descriptions";
-    var jds = Model as List<dynamic> ?? new();
+    var jds = Model ?? Array.Empty<AIMS.ViewModels.Recruitment.JobDescriptionVm>();
+    var error = ViewData["Error"] as string;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -16,6 +19,18 @@
 {
     <div class="alert alert-success">@TempData["Success"]</div>
 }
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        <div class="fw-semibold mb-1">Không tải được danh sách Job Description.</div>
+        <div>@error</div>
+    </div>
+}
 
 <div class="card border-0 shadow-sm">
     <div class="table-responsive">
@@ -27,33 +42,65 @@
                     <th>Vị trí</th>
                     <th>Required Skills</th>
                     <th>Status</th>
-                    <th>Deadline</th>
                     <th>Hành động</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var jd in jds)
+                @if (jds.Count == 0)
                 {
                     <tr>
-                        <td>@jd.id</td>
-                        <td class="fw-semibold">@jd.title</td>
-                        <td>@jd.jobPositionTitle</td>
-                        <td>
-                            <small class="text-muted">@jd.requiredSkills</small>
-                        </td>
-                        <td>
-                            <span class="badge @(jd.status == "OPEN" ? "bg-success" : "bg-secondary")">
-                                @jd.status
-                            </span>
-                        </td>
-                        <td>@jd.deadlineDate</td>
-                        <td>
-                            <a asp-area="HR" asp-controller="Screening"            asp-action="Ranking" asp-route-jdId="@jd.id"
-                                   class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-trophy"></i> Ranking
-                            </a>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            Chưa có dữ liệu để hiển thị.
                         </td>
                     </tr>
+                }
+                else
+                {
+                    @foreach (var jd in jds)
+                    {
+                        <tr>
+                            <td>@jd.Id</td>
+                            <td class="fw-semibold">@jd.Title</td>
+                            <td>@jd.JobPositionTitle</td>
+                            <td>
+                                <small class="text-muted">@jd.RequiredSkills</small>
+                            </td>
+                            <td>
+                                <span class="badge @(jd.Status == "OPEN" ? "bg-success" : "bg-secondary")">
+                                    @jd.Status
+                                </span>
+                            </td>
+                            <td>
+                                <a asp-action="Details"
+                                   asp-route-id="@jd.Id"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a asp-action="Edit"
+                                   asp-route-id="@jd.Id"
+                                   class="btn btn-sm btn-outline-warning">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a asp-area="HR"
+                                   asp-controller="Screening"
+                                   asp-action="Ranking"
+                                   asp-route-jdId="@jd.Id"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-trophy"></i> Ranking
+                                </a>
+                                <form asp-action="Delete"
+                                      asp-route-id="@jd.Id"
+                                      method="post"
+                                      class="d-inline"
+                                      onsubmit="return confirm('Xóa JD này?');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
                 }
             </tbody>
         </table>

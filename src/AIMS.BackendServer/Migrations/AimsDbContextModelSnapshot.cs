@@ -33,6 +33,10 @@ namespace AIMS.BackendServer.Migrations
                     b.Property<int>("ApplicationId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("KeywordsMatched")
                         .HasColumnType("nvarchar(max)");
 
@@ -42,6 +46,11 @@ namespace AIMS.BackendServer.Migrations
                     b.Property<decimal>("MatchingScore")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("Ranking")
                         .HasColumnType("int");
@@ -831,6 +840,9 @@ namespace AIMS.BackendServer.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<int?>("LessonId")
+                        .HasColumnType("int");
+
                     b.Property<int>("MaxAttempts")
                         .HasColumnType("int");
 
@@ -850,6 +862,8 @@ namespace AIMS.BackendServer.Migrations
                     b.HasIndex("CourseId");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("LessonId");
 
                     b.ToTable("QuizBanks");
                 });
@@ -1035,16 +1049,32 @@ namespace AIMS.BackendServer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AnswerText")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("AttemptId")
                         .HasColumnType("int");
 
-                    b.Property<bool>("IsCorrect")
+                    b.Property<bool?>("IsCorrect")
                         .HasColumnType("bit");
+
+                    b.Property<string>("MentorFeedback")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("MentorScore")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("MentorUserId")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("QuestionId")
                         .HasColumnType("int");
 
-                    b.Property<int>("SelectedOptionId")
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("SelectedOptionId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -1515,9 +1545,15 @@ namespace AIMS.BackendServer.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("AIMS.BackendServer.Data.Entities.Lesson", "Lesson")
+                        .WithMany("QuizBanks")
+                        .HasForeignKey("LessonId");
+
                     b.Navigation("Course");
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("Lesson");
                 });
 
             modelBuilder.Entity("AIMS.BackendServer.Data.Entities.QuizQuestion", b =>
@@ -1605,8 +1641,7 @@ namespace AIMS.BackendServer.Migrations
                     b.HasOne("AIMS.BackendServer.Data.Entities.QuestionOption", "SelectedOption")
                         .WithMany()
                         .HasForeignKey("SelectedOptionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Attempt");
 
@@ -1744,6 +1779,8 @@ namespace AIMS.BackendServer.Migrations
             modelBuilder.Entity("AIMS.BackendServer.Data.Entities.Lesson", b =>
                 {
                     b.Navigation("Progresses");
+
+                    b.Navigation("QuizBanks");
                 });
 
             modelBuilder.Entity("AIMS.BackendServer.Data.Entities.QuizBank", b =>

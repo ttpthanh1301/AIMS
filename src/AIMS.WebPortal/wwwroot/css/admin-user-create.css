@@ -1,0 +1,58 @@
+    .role-panel {
+        border: 1px solid rgba(31,124,192,.14);
+        border-radius: 16px;
+        padding: 1rem;
+        height: 100%;
+        transition: all .2s ease;
+        background: #fff;
+    }
+.role-panel.active {
+    border-color: rgba(142,199,64,.72);
+    box-shadow: 0 0 0 3px rgba(142,199,64,.12);
+    background: #f9fdf2;
+}
+
+.password-input-group {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    overflow: hidden;
+}
+
+.password-input-group:focus-within {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, .25);
+}
+
+.password-input-group .form-control {
+    border: 0;
+}
+
+.password-input-group .form-control:focus {
+    box-shadow: none;
+}
+
+.password-toggle {
+    background: #fff;
+    border: 0;
+    border-left: 1px solid var(--bs-border-color);
+    color: #0d6efd;
+    padding: 0 1rem;
+    transition: color .2s ease, background-color .2s ease;
+}
+
+.password-toggle:hover {
+    background: #f8f9fa;
+    color: #0a58ca;
+}
+
+.password-toggle:focus {
+    outline: 0;
+}
+
+.role-specific {
+    display: none;
+}
+
+    .role-specific.show {
+        display: block;
+    }

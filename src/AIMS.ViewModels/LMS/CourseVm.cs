@@ -34,6 +34,12 @@ public class LessonSummaryVm
     public string Title { get; set; } = string.Empty;
     public string LessonType { get; set; } = string.Empty;
     public string? ContentUrl { get; set; }
+    public string? Description { get; set; }
+    public string? VideoUrl { get; set; }
+    public string? VideoEmbedUrl { get; set; }
+    public string? SlideUrl { get; set; }
+    public string? SlideEmbedUrl { get; set; }
+    public List<string> ImageUrls { get; set; } = new();
     public int? DurationMinutes { get; set; }
     public int SortOrder { get; set; }
     public bool IsRequired { get; set; }
@@ -52,6 +58,7 @@ public class CreateCourseRequest
     public string? ThumbnailUrl { get; set; }
 
     public string Level { get; set; } = "BEGINNER";
+    public bool IsPublished { get; set; }
 }
 
 public class UpdateCourseRequest

@@ -97,6 +97,7 @@
                             <select name="questionType" class="form-select form-select-sm">
                                 <option value="SINGLE">Single choice</option>
                                 <option value="MULTIPLE">Multiple choice</option>
+                                <option value="TEXT">Text</option>
                             </select>
                         </div>
                         <div class="col-5">
@@ -176,6 +177,27 @@ function removeOption(btn) {
 
 function prepareSubmit() {
     const rows = document.querySelectorAll('#optionsList .option-row');
+    const questionType = document.querySelector('select[name="questionType"]')?.value || 'SINGLE';
+    const checkedCount = document.querySelectorAll('#optionsList input[type=checkbox]:checked').length;
+    const optionTexts = Array.from(document.querySelectorAll('#optionsList input[name="optionTexts"]'))
+        .map(input => input.value.trim())
+        .filter(Boolean);
+
+    if (questionType !== 'TEXT' && optionTexts.length < 2) {
+        alert('Câu hỏi trắc nghiệm phải có ít nhất 2 đáp án.');
+        return false;
+    }
+
+    if (questionType === 'SINGLE' && checkedCount !== 1) {
+        alert('Single choice phải có đúng 1 đáp án đúng.');
+        return false;
+    }
+
+    if (questionType === 'MULTIPLE' && checkedCount < 1) {
+        alert('Multiple choice phải có ít nhất 1 đáp án đúng.');
+        return false;
+    }
+
     rows.forEach(row => {
         const cb = row.querySelector('input[type=checkbox]');
         if (!cb.checked) {
@@ -191,5 +213,18 @@ function prepareSubmit() {
     });
     return true;
 }
+
+const questionTypeSelect = document.querySelector('select[name="questionType"]');
+
+function syncQuestionTypeUi() {
+    const isText = questionTypeSelect?.value === 'TEXT';
+    document.querySelectorAll('#optionsList input[type="text"], #optionsList input[type="checkbox"], #optionsList button')
+        .forEach(element => {
+            element.disabled = !!isText;
+        });
+}
+
+questionTypeSelect?.addEventListener('change', syncQuestionTypeUi);
+syncQuestionTypeUi();
 </script>
 }

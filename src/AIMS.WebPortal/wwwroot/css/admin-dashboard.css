@@ -1,0 +1,66 @@
+.admin-hero {
+    background: linear-gradient(135deg, rgba(31,124,192,.96) 0%, rgba(20,95,152,.96) 60%, rgba(142,199,64,.92) 100%);
+    color: #fff;
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.admin-hero-badge {
+    background: rgba(255,255,255,.16);
+}
+
+.admin-active-period-card {
+    background: rgba(255,255,255,.88);
+    backdrop-filter: blur(10px);
+    color: var(--brand-ink);
+}
+
+.admin-active-period-label {
+    color: rgba(23,50,77,.66);
+}
+
+.admin-active-period-date,
+.admin-active-period-empty {
+    color: rgba(23,50,77,.72);
+}
+
+.admin-insight-card--recruitment {
+    background: #f5faff;
+}
+
+.admin-insight-card--lms {
+    background: #f7fbef;
+}
+
+.admin-insight-card--task {
+    background: #fff9ee;
+}
+
+.admin-insight-card--period {
+    background: #f8f8ff;
+}
+
+.metric-card {
+    height: 100%;
+    padding: 1.3rem;
+}
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--brand-blue-deep);
+    }
+
+.quick-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+        padding: 1rem 1.1rem;
+        border: 1px solid rgba(31,124,192,.12);
+        border-radius: 16px;
+        text-decoration: none;
+    color: inherit;
+    background: #fff;
+}

@@ -13,4 +13,5 @@ public class Lesson
 
     public Data.Entities.CourseChapter Chapter { get; set; } = null!;
     public ICollection<LessonProgress> Progresses { get; set; } = new List<LessonProgress>();
+    public ICollection<QuizBank> QuizBanks { get; set; } = new List<QuizBank>();
 }

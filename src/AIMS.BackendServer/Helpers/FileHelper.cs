@@ -3,7 +3,7 @@ namespace AIMS.BackendServer.Helpers;
 public static class FileHelper
 {
     private static readonly string[] AllowedExtensions
-        = { ".pdf", ".doc", ".docx" };
+        = { ".pdf" };
 
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 
@@ -14,6 +14,9 @@ public static class FileHelper
             && file.Length > 0
             && file.Length <= MaxFileSizeBytes;
     }
+
+    public static string InvalidCVFileMessage =>
+        "File không hợp lệ. Chỉ chấp nhận PDF có thể copy text, tối đa 5MB.";
 
     public static async Task<string> SaveCVFileAsync(
         IFormFile file,

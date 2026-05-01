@@ -1,115 +1,258 @@
+@using System.Text.Json
+
 @{
     ViewData["Title"] = "Ranking List";
-    int jdId   = ViewBag.JdId;
-    var result = ViewBag.Result as dynamic;
+    int jdId = ViewBag.JdId;
+    var resultElement = ViewBag.Result is JsonElement json ? json : default;
+    var rankingList = resultElement.ValueKind == JsonValueKind.Object
+        && resultElement.TryGetProperty("ranking", out var ranking)
+        && ranking.ValueKind == JsonValueKind.Array
+            ? ranking.EnumerateArray().ToList()
+            : new List<JsonElement>();
+
+    string GetString(JsonElement item, string name)
+        => item.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null
+            ? value.ToString() : "";
+
+    int GetInt(JsonElement item, string name)
+        => item.TryGetProperty(name, out var value) && value.TryGetInt32(out var result) ? result : 0;
+
+    double GetDouble(JsonElement item, string name)
+        => item.TryGetProperty(name, out var value) && value.TryGetDouble(out var result) ? result : 0;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="fw-bold mb-0">
-        <i class="bi bi-trophy text-warning me-2"></i>
-        AI Ranking List — JD #@jdId
-    </h5>
-    <form asp-action="RunBatch" method="post" class="d-inline">
-        <input type="hidden" name="jdId" value="@jdId" />
-        <button type="submit" class="btn btn-success">
-            <i class="bi bi-robot me-1"></i>Chạy AI Screening
-        </button>
-    </form>
+@section Styles {
+    <link rel="stylesheet" href="~/css/hr-screening-ranking.css" />
+}
+
+<div class="ranking-header mb-4">
+    <div class="ranking-title">
+        <h5 class="fw-bold mb-0">
+            <i class="bi bi-trophy text-warning me-2"></i>AI Ranking List
+            <span class="badge bg-secondary ms-1 fw-normal fs-6">JD #@jdId</span>
+        </h5>
+    </div>
+    <br>
+    <div class="screening-actions" style="align-items: center !important;">
+        <form asp-action="UploadBatch" method="post" enctype="multipart/form-data"
+              class="screening-upload-form m-0">
+            <input type="hidden" name="jdId" value="@jdId" />
+            <input id="cvFiles-@jdId" type="file" name="cvFiles"
+                   accept=".pdf,application/pdf" multiple
+                   class="screening-file-input" data-file-input required />
+            <label for="cvFiles-@jdId" class="btn btn-sm btn-outline-primary screening-file-trigger mb-0">
+                <i class="bi bi-paperclip me-1"></i>
+                <span data-file-trigger-text>Chọn file PDF</span>
+            </label>
+            <div class="screening-file-summary" data-file-summary>Chưa chọn file nào</div>
+            <button type="submit" class="btn btn-sm btn-primary mb-0">
+                <i class="bi bi-upload me-1"></i>Upload CV
+            </button>
+        </form>
+        <form asp-action="RunBatch" method="post" class="m-0">
+            <input type="hidden" name="jdId" value="@jdId" />
+            <button type="submit" class="btn btn-sm btn-success mb-0" style = "align-items: center !important;">
+                <i class="bi bi-robot me-1"></i>Chạy lại AI
+            </button>
+        </form>
+    </div>
 </div>
 
 @if (TempData["Success"] != null)
 {
-    <div class="alert alert-success">@TempData["Success"]</div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 }
-
-@{
-    // ⭐ Cast an toàn trước khi dùng
-    var rankingList = result != null
-        ? result.ranking as IEnumerable<dynamic>
-        : null;
-}
-
-@if (rankingList != null)
+@if (TempData["Error"] != null)
 {
-    <div class="card border-0 shadow-sm">
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-circle me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (rankingList.Count > 0)
+{
+    <div class="card border-0 shadow-sm ranking-card">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 align-middle ranking-table">
                 <thead class="table-light">
                     <tr>
-                        <th>Rank</th>
-                        <th>Ứng viên</th>
-                        <th>Email</th>
-                        <th style="width:200px">AI Score</th>
-                        <th>Keywords Matched</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th class="col-rank">Rank</th>
+                        <th class="col-name">Ứng viên</th>
+                        <th class="col-email">Email</th>
+                        <th class="col-score">AI Score</th>
+                        <th class="col-skills">Kỹ năng</th>
+                        <th class="col-processing">Xử lý</th>
+                        <th class="col-status">Status</th>
+                        <th class="col-actions"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var item in rankingList)
                     {
-                        // ⭐ Cast từng field trước khi dùng trong expression
-                        int    rank          = item.rank          != null ? (int)item.rank          : 0;
-                        double matchingScore = item.matchingScore != null ? (double)item.matchingScore : 0;
-                        string status        = item.status        != null ? (string)item.status        : "";
-                        string appId         = item.applicationId != null ? item.applicationId.ToString() : "0";
+                        int rank = GetInt(item, "rank");
+                        double matchingScore = GetDouble(item, "matchingScore");
+                        string status = GetString(item, "status");
+                        string processingStatus = GetString(item, "processingStatus");
+                        string errorMessage = GetString(item, "errorMessage");
+                        string appId = GetString(item, "applicationId");
+                        string email = GetString(item, "applicantEmail");
+                        string name = GetString(item, "applicantName");
 
-                        string rankBadge  = rank == 1  ? "bg-warning text-dark"
-                                         : rank <= 3   ? "bg-info"
-                                         :               "bg-secondary";
+                        string rankBadge = rank == 1 ? "bg-warning text-dark"
+                                         : rank is > 1 and <= 3 ? "bg-info text-white"
+                                         : rank > 0 ? "bg-secondary"
+                                         : "bg-light text-dark";
 
                         string scoreBadge = matchingScore >= 70 ? "bg-success"
-                                         : matchingScore >= 50  ? "bg-warning"
-                                         :                         "bg-danger";
+                                         : matchingScore >= 50 ? "bg-warning"
+                                         : "bg-danger";
+                        string scoreWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(matchingScore), 0, 100)}";
+
+                        string processingBadge = processingStatus == "Completed" ? "bg-success"
+                                                : processingStatus == "Failed" ? "bg-danger"
+                                                : processingStatus == "Processing" ? "bg-primary"
+                                                : "bg-secondary";
 
                         string statusBadge = status == "ACCEPTED" ? "bg-success"
-                                          : status == "REJECTED"  ? "bg-danger"
-                                          :                          "bg-secondary";
+                                          : status == "REJECTED" ? "bg-danger"
+                                          : status == "INTERVIEW" ? "bg-info text-white"
+                                          : "bg-secondary";
 
                         <tr>
-                            <td>
-                                <span class="badge @rankBadge">#@rank</span>
+                            <td class="col-rank text-center">
+                                <span class="badge @rankBadge ranking-badge">
+                                    @(rank == 1 ? "🥇" : rank == 2 ? "🥈" : rank == 3 ? "🥉" : rank > 0 ? $"#{rank}" : "-")
+                                </span>
                             </td>
-                            <td class="fw-semibold">@item.applicantName</td>
-                            <td class="text-muted small">@item.applicantEmail</td>
-                            <td>
+
+                            @* {{!-- Ứng viên --}} *@
+                            <td class="col-name">
+                                <span class="fw-semibold text-truncate d-block" style="max-width:150px" title="@name">
+                                    @name
+                                </span>
+                            </td>
+
+    
+                            <td class="col-email">
+                                <a href="mailto:@email"
+                                   class="text-muted small text-truncate d-block ranking-email"
+                                   title="@email">
+                                    @email
+                                </a>
+                            </td>
+
+                            @* {{!-- AI Score --}} *@
+                            <td class="col-score">
                                 <div class="d-flex align-items-center gap-2">
-                                    <div class="progress flex-grow-1" style="height:8px">
-                                        <div class="progress-bar @scoreBadge"
-                                             style="width:@(matchingScore)%">
-                                        </div>
+                                    <div class="progress flex-grow-1 ranking-score-progress">
+                                        <div class="progress-bar @scoreBadge @scoreWidthClass"></div>
                                     </div>
-                                    <span class="fw-bold" style="min-width:45px">
+                                    <span class="fw-bold ranking-score-value text-nowrap">
                                         @(Math.Round(matchingScore, 1))%
                                     </span>
                                 </div>
                             </td>
-                            <td>
-                                <small class="text-success">
-                                    ✅ @item.keywordsMatched
-                                </small>
+
+                            @* {{!-- Kỹ năng --}} *@
+                            <td class="col-skills">
+                                @if (processingStatus == "Failed")
+                                {
+                                    <small class="text-danger">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>@errorMessage
+                                    </small>
+                                }
+                                else
+                                {
+                                    <div class="ranking-keywords">
+                                        <small class="text-success d-block text-truncate"
+                                               title="@GetString(item, "keywordsMatched")">
+                                            <i class="bi bi-check2 me-1"></i>@GetString(item, "keywordsMatched")
+                                        </small>
+                                        <small class="text-danger d-block text-truncate"
+                                               title="@GetString(item, "keywordsMissing")">
+                                            <i class="bi bi-x me-1"></i>@GetString(item, "keywordsMissing")
+                                        </small>
+                                    </div>
+                                }
                             </td>
-                            <td>
+
+                            @* {{!-- Xử lý --}} *@
+                            <td class="col-processing text-center">
+                                <span class="badge @processingBadge">@processingStatus</span>
+                            </td>
+
+                            @* {{!-- Status --}} *@
+                            <td class="col-status text-center">
                                 <span class="badge @statusBadge">@status</span>
                             </td>
-                            <td>
-                                <a asp-action="CVDetail"
-                                   asp-route-applicationId="@appId"
-                                   class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i>
-                                </a>
+
+                            @* {{!-- Actions --}} *@
+                            <td class="col-actions">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a asp-action="CVDetail"
+                                       asp-route-applicationId="@appId"
+                                       class="btn btn-outline-primary"
+                                       title="Xem chi tiết">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <form asp-action="DeleteApplication" method="post"
+                                          style="margin:0; display:contents;">
+                                        <input type="hidden" name="applicationId" value="@appId" />
+                                        <input type="hidden" name="jdId" value="@jdId" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                title="Xóa"
+                                                onclick="return confirm('Bạn chắc chắn muốn xóa ứng viên này?')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
+        <div class="card-footer text-muted small px-3 py-2">
+            Tổng cộng <strong>@rankingList.Count</strong> ứng viên
+        </div>
     </div>
 }
 else
 {
-    <div class="alert alert-warning">
-        <i class="bi bi-info-circle me-2"></i>
-        Chưa có kết quả AI. Nhấn <strong>Chạy AI Screening</strong> để bắt đầu.
+    <div class="alert alert-warning d-flex align-items-center gap-3">
+        <i class="bi bi-inbox fs-4"></i>
+        <div>
+            <div class="fw-semibold">Chưa có kết quả AI</div>
+            <div class="small">Upload CV PDF hoặc nhấn <strong>Chạy lại AI</strong> để bắt đầu screening.</div>
+        </div>
     </div>
+}
+
+@section Scripts {
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("[data-file-input]").forEach(function (input) {
+            var summary = input.form?.querySelector("[data-file-summary]");
+            var triggerText = input.form?.querySelector("[data-file-trigger-text]");
+            if (!summary) return;
+
+            input.addEventListener("change", function () {
+                var files = Array.from(input.files || []);
+                if (!files.length) {
+                    summary.textContent = "Chưa chọn file nào";
+                    summary.classList.remove("is-selected");
+                    if (triggerText) triggerText.textContent = "Chọn file PDF";
+                    return;
+                }
+                summary.textContent = files.length === 1 ? files[0].name : `${files.length} file PDF đã chọn`;
+                summary.classList.add("is-selected");
+                if (triggerText) triggerText.textContent = "Đổi file";
+            });
+        });
+    });
+</script>
 }

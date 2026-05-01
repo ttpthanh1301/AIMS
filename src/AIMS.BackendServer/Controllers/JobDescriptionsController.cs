@@ -102,7 +102,7 @@ public class JobDescriptionsController : ControllerBase
     // POST: api/jobdescriptions
     // =========================================================
     [HttpPost]
-    [Authorize(Roles = "Admin,HR")]
+    [Authorize(Roles = "Admin,HR,Mentor")]
     public async Task<IActionResult> Create([FromBody] CreateJobDescriptionRequest request)
     {
         if (!ModelState.IsValid)
@@ -146,7 +146,7 @@ public class JobDescriptionsController : ControllerBase
     // PUT: api/jobdescriptions/{id}
     // =========================================================
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin,HR")]
+    [Authorize(Roles = "Admin,HR,Mentor")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateJobDescriptionRequest request)
@@ -158,6 +158,13 @@ public class JobDescriptionsController : ControllerBase
         if (jd == null)
             return NotFound(new { message = $"JD #{id} không tồn tại." });
 
+        var positionExists = await _context.JobPositions
+            .AnyAsync(p => p.Id == request.JobPositionId && p.IsActive);
+
+        if (!positionExists)
+            return BadRequest(new { message = "JobPosition không tồn tại hoặc đã bị đóng." });
+
+        jd.JobPositionId = request.JobPositionId;
         jd.Title = request.Title;
         jd.DetailContent = request.DetailContent;
         jd.RequiredSkills = request.RequiredSkills;

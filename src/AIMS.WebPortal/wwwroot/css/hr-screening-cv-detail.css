@@ -1,0 +1,9 @@
+.screening-score-progress {
+    height: 12px;
+}
+
+.cv-raw-text {
+    font-size: .85rem;
+    max-height: 200px;
+    overflow-y: auto;
+}

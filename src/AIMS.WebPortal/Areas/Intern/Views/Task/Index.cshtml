@@ -1,70 +1,357 @@
 @using AIMS.ViewModels.TaskManagement
 @model List<TaskVm>
 @{
-    ViewData["Title"] = "Tasks của tôi";
+    ViewData["Title"] = "Kanban Board";
     var tasks = Model ?? new List<TaskVm>();
+    var todoTasks = tasks.Where(t => t.Status == "TODO").ToList();
+    var inProgressTasks = tasks.Where(t => t.Status == "IN_PROGRESS").ToList();
+    var doneTasks = tasks.Where(t => t.Status == "DONE").ToList();
+    var updateStatusUrl = Url.Action("UpdateStatus", "Task", new { area = "Intern" }) ?? "/Intern/Task/UpdateStatus";
 }
 
-<h5 class="fw-bold mb-4">
-    <i class="bi bi-list-task text-primary me-2"></i>Tasks của tôi
-</h5>
+@section Styles {
+<link rel="stylesheet" href="~/css/intern-task-board.css" />
+}
 
-<div class="row g-3">
-    @foreach (var task in tasks.OrderBy(t => t.Deadline))
-    {
-        bool isDone = task.Status == "DONE";
-        bool isOverdue = task.IsOverdue;
-
-        <div class="col-md-6 col-xl-4">
-            <div class="card border-0 shadow-sm
-                @(isOverdue ? "border-start border-danger border-3" :
-                                   isDone ? "border-start border-success border-3" : "")">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <span class="fw-semibold">@task.Title</span>
-                        <span
-                            class="badge @(task.Priority == "HIGH" ? "bg-danger" : task.Priority == "MEDIUM" ? "bg-warning text-dark" : "bg-info")">
-                            @task.Priority
-                        </span>
-                    </div>
-                    <div class="text-muted small mt-1">@task.Description</div>
-                    <div class="mt-2 d-flex justify-content-between align-items-center">
-                        <span
-                            class="badge @(isDone ? "bg-success" : isOverdue ? "bg-danger" : task.Status == "IN_PROGRESS" ? "bg-primary" : "bg-secondary")">
-                            @task.Status
-                        </span>
-                        <small class="text-muted">
-                            <i class="bi bi-calendar me-1"></i>
-                            @task.Deadline.ToString("dd/MM/yyyy")
-                        </small>
-                    </div>
-                    @if (!isDone)
-                    {
-                        <div class="mt-3 d-flex gap-2">
-                            @if (task.Status == "TODO")
-                            {
-                                <form asp-action="UpdateStatus" method="post">
-                                    <input type="hidden" name="id" value="@task.Id" />
-                                    <input type="hidden" name="status" value="IN_PROGRESS" />
-                                    <button class="btn btn-sm btn-outline-primary">
-                                        ▶ Bắt đầu
-                                    </button>
-                                </form>
-                            }
-                            @if (task.Status == "IN_PROGRESS")
-                            {
-                                <form asp-action="UpdateStatus" method="post">
-                                    <input type="hidden" name="id" value="@task.Id" />
-                                    <input type="hidden" name="status" value="DONE" />
-                                    <button class="btn btn-sm btn-success">
-                                        ✓ Hoàn thành
-                                    </button>
-                                </form>
-                            }
-                        </div>
-                    }
-                </div>
-            </div>
-        </div>
-    }
+<div class="mb-4">
+    <h5 class="fw-bold">
+        <i class="bi bi-kanban text-primary me-2"></i>Kanban Board
+    </h5>
+    <p class="text-muted small">
+        Kéo task để cập nhật tiến độ cá nhân • Bạn có thể kéo qua lại giữa các cột khi cần chỉnh sửa trạng thái
+    </p>
 </div>
+
+@if (TempData["Error"] is string errorMessage)
+{
+    <div class="alert alert-danger mb-4">@errorMessage</div>
+}
+
+<div class="kanban-container">
+    <div class="kanban-column todo">
+        <h6>
+            <span>
+                <i class="bi bi-circle me-2"></i>Chưa làm
+            </span>
+            <span class="task-counter">@todoTasks.Count</span>
+        </h6>
+        <div class="task-list" data-status="TODO">
+            @if (todoTasks.Count == 0)
+            {
+                <div class="no-tasks">
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var task in todoTasks.OrderBy(t => t.Deadline))
+                {
+                    <div class="task-card @(task.IsOverdue ? "overdue" : "") @(task.Priority == "HIGH" ? "high-priority" : "")"
+                         data-task-id="@task.Id"
+                         data-task-title="@task.Title"
+                         data-priority="@task.Priority"
+                         data-is-overdue="@(task.IsOverdue ? "true" : "false")"
+                         title="@task.Title">
+                        <div class="task-header">
+                            <div class="task-title">@task.Title</div>
+                            <span class="task-priority @task.Priority">@task.Priority</span>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge bg-secondary">TODO</span>
+                            <span class="task-deadline @(task.IsOverdue ? "overdue" : "")">
+                                <i class="bi bi-calendar2"></i>
+                                @task.Deadline.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                        <div class="task-actions">
+                            <a class="task-detail-link"
+                               asp-area="Intern"
+                               asp-controller="Task"
+                               asp-action="Details"
+                               asp-route-id="@task.Id">Xem chi tiết</a>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="kanban-column progress">
+        <h6>
+            <span>
+                <i class="bi bi-play-circle me-2"></i>Đang làm
+            </span>
+            <span class="task-counter">@inProgressTasks.Count</span>
+        </h6>
+        <div class="task-list" data-status="IN_PROGRESS">
+            @if (inProgressTasks.Count == 0)
+            {
+                <div class="no-tasks">
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var task in inProgressTasks.OrderBy(t => t.Deadline))
+                {
+                    <div class="task-card @(task.IsOverdue ? "overdue" : "") @(task.Priority == "HIGH" ? "high-priority" : "")"
+                         data-task-id="@task.Id"
+                         data-task-title="@task.Title"
+                         data-priority="@task.Priority"
+                         data-is-overdue="@(task.IsOverdue ? "true" : "false")"
+                         title="@task.Title">
+                        <div class="task-header">
+                            <div class="task-title">@task.Title</div>
+                            <span class="task-priority @task.Priority">@task.Priority</span>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge bg-primary">IN PROGRESS</span>
+                            <span class="task-deadline @(task.IsOverdue ? "overdue" : "")">
+                                <i class="bi bi-calendar2"></i>
+                                @task.Deadline.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                        <div class="task-actions">
+                            <a class="task-detail-link"
+                               asp-area="Intern"
+                               asp-controller="Task"
+                               asp-action="Details"
+                               asp-route-id="@task.Id">Xem chi tiết</a>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="kanban-column done">
+        <h6>
+            <span>
+                <i class="bi bi-check-circle me-2"></i>Hoàn thành
+            </span>
+            <span class="task-counter">@doneTasks.Count</span>
+        </h6>
+        <div class="task-list" data-status="DONE">
+            @if (doneTasks.Count == 0)
+            {
+                <div class="no-tasks">
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var task in doneTasks.OrderByDescending(t => t.Deadline))
+                {
+                    <div class="task-card"
+                         data-task-id="@task.Id"
+                         data-task-title="@task.Title"
+                         data-priority="@task.Priority"
+                         data-is-overdue="@(task.IsOverdue ? "true" : "false")"
+                         title="@task.Title">
+                        <div class="task-header">
+                            <div class="task-title">
+                                <i class="bi bi-check-circle text-success me-1"></i>
+                                <s>@task.Title</s>
+                            </div>
+                            <span class="task-priority @task.Priority">@task.Priority</span>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge bg-success">DONE</span>
+                            <span class="task-deadline">
+                                <i class="bi bi-calendar2"></i>
+                                @task.Deadline.ToString("dd/MM/yyyy")
+                            </span>
+                        </div>
+                        <div class="task-actions">
+                            <a class="task-detail-link"
+                               asp-area="Intern"
+                               asp-controller="Task"
+                               asp-action="Details"
+                               asp-route-id="@task.Id">Xem chi tiết</a>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+    const updateStatusUrl = '@updateStatusUrl';
+    const lists = document.querySelectorAll('.task-list');
+
+    lists.forEach(list => {
+        new Sortable(list, {
+            group: 'intern-tasks',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            dragClass: 'dragging',
+            draggable: '.task-card',
+            onMove: (evt) => {
+                const fromStatus = evt.from.dataset.status;
+                const toStatus = evt.to.dataset.status;
+
+                if (fromStatus === toStatus) {
+                    return true;
+                }
+
+                return true;
+            },
+            onEnd: async (evt) => {
+                const oldStatus = evt.from.dataset.status;
+                const newStatus = evt.to.dataset.status;
+
+                if (oldStatus === newStatus) {
+                    return;
+                }
+
+                const taskId = parseInt(evt.item.dataset.taskId, 10);
+                evt.item.style.opacity = '0.6';
+                syncTaskCardAppearance(evt.item, newStatus);
+                refreshBoard();
+
+                try {
+                    const res = await fetch(updateStatusUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            id: taskId,
+                            status: newStatus,
+                            note: `Cập nhật trạng thái từ Intern Kanban (${new Date().toLocaleString('vi-VN')})`
+                        })
+                    });
+
+                    const data = await parseResponse(res);
+                    evt.item.style.opacity = '1';
+
+                    if (!res.ok) {
+                        throw new Error(data.message || 'Cập nhật thất bại');
+                    }
+
+                    showToast(data.message || 'Cập nhật trạng thái thành công', 'success');
+                } catch (err) {
+                    console.error('Error:', err);
+                    evt.item.style.opacity = '1';
+                    showToast(err.message || 'Có lỗi xảy ra, vui lòng thử lại', 'danger');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            }
+        });
+    });
+
+    function refreshBoard() {
+        document.querySelectorAll('.task-list').forEach(refreshColumn);
+    }
+
+    function syncTaskCardAppearance(card, status) {
+        const titleEl = card.querySelector('.task-title');
+        const deadlineEl = card.querySelector('.task-deadline');
+        const title = card.dataset.taskTitle || titleEl?.textContent?.trim() || '';
+        const priority = card.dataset.priority || '';
+        const isOverdue = card.dataset.isOverdue === 'true';
+
+        card.classList.remove('overdue', 'high-priority');
+        deadlineEl?.classList.remove('overdue');
+
+        if (!titleEl) {
+            return;
+        }
+
+        if (status === 'DONE') {
+            titleEl.replaceChildren();
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-check-circle text-success me-1';
+
+            const strike = document.createElement('s');
+            strike.textContent = title;
+
+            titleEl.append(icon, strike);
+            card.title = title;
+            return;
+        }
+
+        titleEl.textContent = title;
+        card.title = title;
+
+        if (priority === 'HIGH') {
+            card.classList.add('high-priority');
+        }
+
+        if (isOverdue) {
+            card.classList.add('overdue');
+            deadlineEl?.classList.add('overdue');
+        }
+    }
+
+    function refreshColumn(list) {
+        const cards = list.querySelectorAll(':scope > .task-card');
+        const placeholder = list.querySelector(':scope > .no-tasks');
+
+        if (cards.length === 0) {
+            if (!placeholder) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'no-tasks';
+                emptyState.innerHTML = `
+                    <div>
+                        <i class="bi bi-inbox"></i>
+                        <div>Không có task nào</div>
+                    </div>
+                `;
+                list.appendChild(emptyState);
+            }
+        } else if (placeholder) {
+            placeholder.remove();
+        }
+
+        const counter = list.closest('.kanban-column')?.querySelector('.task-counter');
+        if (counter) {
+            counter.textContent = cards.length.toString();
+        }
+    }
+
+    async function parseResponse(res) {
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            return {};
+        }
+
+        try {
+            return await res.json();
+        } catch {
+            return {};
+        }
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} position-fixed bottom-0 end-0 m-3`;
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+</script>
+}
