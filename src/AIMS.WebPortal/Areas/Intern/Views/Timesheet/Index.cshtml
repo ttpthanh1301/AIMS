@@ -2,14 +2,57 @@
 @model TimesheetResultVm
 @{
     ViewData["Title"] = "Timesheet";
+    var data = Model ?? new TimesheetResultVm();
+    var items = data.Items ?? new List<TimesheetVm>();
     var tasks = ViewBag.Tasks as List<TaskVm> ?? new List<TaskVm>();
+    var loggedDays = items.Select(i => i.WorkDate.Date).Distinct().Count();
+    var latestLogDate = items.Any() ? items.Max(i => i.WorkDate) : (DateTime?)null;
+    var averageHours = loggedDays > 0 ? Math.Round(data.TotalHours / loggedDays, 1) : 0;
 }
 
-<div class="row g-4">
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold border-0 pt-3">
-                <i class="bi bi-clock-history text-primary me-2"></i>Log giờ làm
+@section Styles {
+<link rel="stylesheet" href="~/css/intern-timesheet.css" />
+}
+
+<div class="intern-timesheet-page">
+    <section class="intern-timesheet-hero">
+        <span class="intern-timesheet-kicker">
+            <i class="bi bi-clock-history"></i> Personal Worklog
+        </span>
+        <h1 class="intern-timesheet-title">Timesheet cá nhân</h1>
+        <p class="intern-timesheet-subtitle">
+            Log giờ làm theo task, theo dõi tổng thời gian đã ghi nhận và xem lại lịch sử công việc
+            trong một màn hình gọn, rõ và đồng bộ với Kanban.
+        </p>
+        <div class="intern-timesheet-stats">
+            <div class="intern-timesheet-stat">
+                <div class="intern-timesheet-stat-label">Tổng giờ đã log</div>
+                <div class="intern-timesheet-stat-value">@data.TotalHours h</div>
+            </div>
+            <div class="intern-timesheet-stat">
+                <div class="intern-timesheet-stat-label">Số lần log</div>
+                <div class="intern-timesheet-stat-value">@items.Count</div>
+            </div>
+            <div class="intern-timesheet-stat">
+                <div class="intern-timesheet-stat-label">Số ngày làm việc</div>
+                <div class="intern-timesheet-stat-value">@loggedDays</div>
+            </div>
+            <div class="intern-timesheet-stat">
+                <div class="intern-timesheet-stat-label">Trung bình / ngày</div>
+                <div class="intern-timesheet-stat-value">@averageHours h</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="intern-timesheet-grid">
+        <div class="card intern-timesheet-panel">
+            <div class="card-header border-0">
+                <div class="intern-timesheet-panel-title">
+                    <i class="bi bi-journal-plus text-primary me-2"></i>Log giờ làm
+                </div>
+                <span class="intern-timesheet-panel-subtitle">
+                    Chỉ hiển thị task đang ở TODO hoặc IN PROGRESS.
+                </span>
             </div>
             <div class="card-body">
                 @if (TempData["Success"] != null)
@@ -25,8 +68,7 @@
                         <label class="form-label fw-semibold">Task</label>
                         <select name="taskId" class="form-select" required>
                             <option value="">-- Chọn task --</option>
-                            @foreach (var t in tasks.Where(t =>
-                                t.Status == "IN_PROGRESS" || t.Status == "TODO"))
+                            @foreach (var t in tasks.Where(t => t.Status == "IN_PROGRESS" || t.Status == "TODO"))
                             {
                                 <option value="@t.Id">@t.Title</option>
                             }
@@ -37,12 +79,12 @@
                         <input name="hoursWorked" type="number"
                                step="0.5" min="0.5" max="12"
                                class="form-control" required />
-                        <small class="text-muted">Tối đa 12h/ngày</small>
+                        <small class="text-muted">Tối đa 12 giờ trong một ngày.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Ghi chú</label>
-                        <textarea name="workNote" class="form-control" rows="2"
-                                  placeholder="Mô tả công việc đã làm..."></textarea>
+                        <textarea name="workNote" class="form-control" rows="3"
+                                  placeholder="Mô tả ngắn phần việc đã thực hiện..."></textarea>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="bi bi-clock me-1"></i>Log giờ
@@ -50,48 +92,55 @@
                 </form>
             </div>
         </div>
-    </div>
 
-    <div class="col-md-8">
-        @if (Model != null)
-        {
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="rounded-3 bg-primary bg-opacity-10 p-3">
-                        <i class="bi bi-clock text-primary fs-3"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small">Tổng giờ đã log</div>
-                        <div class="fs-3 fw-bold text-primary">@Model.TotalHours h</div>
-                    </div>
+        <div class="card intern-timesheet-panel">
+            <div class="card-header border-0">
+                <div class="intern-timesheet-panel-title">
+                    <i class="bi bi-table text-primary me-2"></i>Lịch sử timesheet
                 </div>
+                <span class="intern-timesheet-panel-subtitle">
+                    Log gần nhất: @(latestLogDate?.ToString("dd/MM/yyyy") ?? "--")
+                </span>
             </div>
-
-            <div class="card border-0 shadow-sm">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Ngày</th><th>Task</th>
-                                <th>Giờ làm</th><th>Ghi chú</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var ts in Model.Items)
-                            {
+            <div class="card-body pt-3">
+                @if (!items.Any())
+                {
+                    <div class="intern-timesheet-empty">
+                        <i class="bi bi-inbox fs-2 d-block mb-3 text-primary"></i>
+                        Bạn chưa có bản ghi timesheet nào.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
                                 <tr>
-                                    <td>@ts.WorkDate.ToString("dd/MM/yyyy")</td>
-                                    <td class="fw-semibold small">@ts.TaskTitle</td>
-                                    <td>
-                                        <span class="badge bg-primary">@ts.HoursWorked h</span>
-                                    </td>
-                                    <td class="text-muted small">@ts.WorkNote</td>
+                                    <th>Ngày</th>
+                                    <th>Task</th>
+                                    <th>Giờ làm</th>
+                                    <th>Ghi chú</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach (var ts in items.OrderByDescending(i => i.WorkDate))
+                                {
+                                    <tr>
+                                        <td>@ts.WorkDate.ToString("dd/MM/yyyy")</td>
+                                        <td class="fw-semibold small">@ts.TaskTitle</td>
+                                        <td>
+                                            <span class="intern-timesheet-hours">@ts.HoursWorked h</span>
+                                        </td>
+                                        <td class="small intern-timesheet-note">
+                                            @(string.IsNullOrWhiteSpace(ts.WorkNote) ? "Không có ghi chú." : ts.WorkNote)
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </div>
-        }
+        </div>
     </div>
 </div>

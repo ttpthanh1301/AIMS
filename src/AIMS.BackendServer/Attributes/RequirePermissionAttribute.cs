@@ -5,7 +5,7 @@ namespace AIMS.BackendServer.Attributes;
 /// Thay thế string matching trong Middleware.
 ///
 /// Ví dụ:
-/// [RequirePermission("RECRUITMENT_JD", "CREATE")]
+/// [RequirePermission("JOB_DESCRIPTION", "CREATE")]
 /// public async Task<IActionResult> Create(...) { }
 /// </summary>
 [AttributeUsage(

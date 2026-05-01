@@ -76,58 +76,86 @@ public class TasksController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        var userId = User.GetUserId();
+
         var task = await _context.TaskItems
             .Include(t => t.Assignment)
                 .ThenInclude(a => a.InternUser)
+            .Include(t => t.Assignment)
+                .ThenInclude(a => a.MentorUser)
             .Include(t => t.CreatedByUser)
-            .Include(t => t.Activities.OrderByDescending(a => a.ChangedAt))
+            .Include(t => t.Activities)
+                .ThenInclude(a => a.ChangedByUser)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (task == null)
             return NotFound(new { message = $"Task #{id} không tồn tại." });
 
-        return Ok(new
+        if (User.IsInRole("Intern") && task.Assignment.InternUserId != userId)
+            return Forbid();
+
+        if (User.IsInRole("Mentor") && task.Assignment.MentorUserId != userId)
+            return Forbid();
+
+        var result = new TaskDetailVm
         {
-            task.Id,
-            task.Title,
-            task.Description,
-            task.AssignmentId,
+            Id = task.Id,
+            Title = task.Title,
+            Description = task.Description,
+            AssignmentId = task.AssignmentId,
             InternName = $"{task.Assignment.InternUser.FirstName} {task.Assignment.InternUser.LastName}",
-            task.Priority,
-            task.Status,
-            task.Deadline,
-            task.EstimatedHours,
-            task.CreateDate,
+            Priority = task.Priority,
+            Status = task.Status,
+            Deadline = task.Deadline,
+            EstimatedHours = task.EstimatedHours,
+            CreateDate = task.CreateDate,
+            CreatedBy = $"{task.CreatedByUser.FirstName} {task.CreatedByUser.LastName}",
             IsOverdue = task.Deadline < DateTime.UtcNow && task.Status != "DONE",
-            Activities = task.Activities.Select(a => new
-            {
-                a.FromStatus,
-                a.ToStatus,
-                a.Note,
-                a.ChangedAt,
-            }),
-        });
+            Activities = task.Activities
+                .OrderByDescending(a => a.ChangedAt)
+                .Select(a => new TaskActivityVm
+                {
+                    FromStatus = a.FromStatus,
+                    ToStatus = a.ToStatus,
+                    Note = a.Note,
+                    ChangedBy = $"{a.ChangedByUser.FirstName} {a.ChangedByUser.LastName}",
+                    ChangedAt = a.ChangedAt,
+                })
+                .ToList(),
+        };
+
+        return Ok(result);
     }
 
     [HttpGet("{id}/activities")]
     public async Task<IActionResult> GetActivities(int id)
     {
-        var taskExists = await _context.TaskItems.AnyAsync(t => t.Id == id);
-        if (!taskExists)
+        var userId = User.GetUserId();
+
+        var task = await _context.TaskItems
+            .Include(t => t.Assignment)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (task == null)
             return NotFound(new { message = $"Task #{id} không tồn tại." });
+
+        if (User.IsInRole("Intern") && task.Assignment.InternUserId != userId)
+            return Forbid();
+
+        if (User.IsInRole("Mentor") && task.Assignment.MentorUserId != userId)
+            return Forbid();
 
         var activities = await _context.TaskActivities
             .Include(a => a.ChangedByUser)
             .Where(a => a.TaskId == id)
             .OrderByDescending(a => a.ChangedAt)
-            .Select(a => new
+            .Select(a => new TaskActivityVm
             {
-                a.Id,
-                a.FromStatus,
-                a.ToStatus,
-                a.Note,
+                FromStatus = a.FromStatus,
+                ToStatus = a.ToStatus,
+                Note = a.Note,
                 ChangedBy = a.ChangedByUser.FirstName + " " + a.ChangedByUser.LastName,
-                a.ChangedAt,
+                ChangedAt = a.ChangedAt,
             })
             .ToListAsync();
 
@@ -259,13 +287,19 @@ public class TasksController : ControllerBase
     [Authorize(Roles = "Admin,Mentor")]
     public async Task<IActionResult> Delete(int id)
     {
+        var userId = User.GetUserId();
+
         var task = await _context.TaskItems
+            .Include(t => t.Assignment)
             .Include(t => t.Activities)
             .Include(t => t.Timesheets)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (task == null)
             return NotFound(new { message = $"Task #{id} không tồn tại." });
+
+        if (User.IsInRole("Mentor") && task.Assignment.MentorUserId != userId)
+            return Forbid();
 
         _context.TaskActivities.RemoveRange(task.Activities);
         _context.Timesheets.RemoveRange(task.Timesheets);

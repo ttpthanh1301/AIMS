@@ -19,15 +19,18 @@ public class ApplicationsController : ControllerBase
     private readonly AimsDbContext _context;
     private readonly IAIScreeningService _aiService;
     private readonly IConfiguration _config;
+    private readonly ILogger<ApplicationsController> _logger;
 
     public ApplicationsController(
         AimsDbContext context,
         IAIScreeningService aiService,
-        IConfiguration config)
+        IConfiguration config,
+        ILogger<ApplicationsController> logger)
     {
         _context = context;
         _aiService = aiService;
         _config = config;
+        _logger = logger;
     }
 
     // ─────────────────────────────────────────────────────────
@@ -70,6 +73,10 @@ public class ApplicationsController : ControllerBase
                     ? a.AIScreeningResult.MatchingScore : null,
                 Ranking = a.AIScreeningResult != null
                     ? a.AIScreeningResult.Ranking : null,
+                ScreeningProcessingStatus = a.AIScreeningResult != null
+                    ? a.AIScreeningResult.ProcessingStatus : null,
+                ScreeningErrorMessage = a.AIScreeningResult != null
+                    ? a.AIScreeningResult.ErrorMessage : null,
             })
             .ToListAsync();
 
@@ -99,6 +106,7 @@ public class ApplicationsController : ControllerBase
             JobTitle = app.JobDescription.Title,
             ApplicantName = $"{app.ApplicantUser.FirstName} {app.ApplicantUser.LastName}",
             ApplicantEmail = app.ApplicantUser.Email,
+            ApplicantGPA = app.ApplicantUser.GPA,
             CVFileUrl = app.CVFileUrl,
             CoverLetter = app.CoverLetter,
             Status = app.Status,
@@ -112,6 +120,7 @@ public class ApplicationsController : ControllerBase
                 app.CVParsedData.SkillsExtracted,
                 app.CVParsedData.EducationExtracted,
                 app.CVParsedData.ExperienceExtracted,
+                app.CVParsedData.RawText,
             },
             // AI Screening Result
             ScreeningResult = app.AIScreeningResult == null ? null : new
@@ -120,6 +129,8 @@ public class ApplicationsController : ControllerBase
                 app.AIScreeningResult.Ranking,
                 app.AIScreeningResult.KeywordsMatched,
                 app.AIScreeningResult.KeywordsMissing,
+                app.AIScreeningResult.ProcessingStatus,
+                app.AIScreeningResult.ErrorMessage,
                 app.AIScreeningResult.ScreenedAt,
             },
         });
@@ -136,80 +147,19 @@ public class ApplicationsController : ControllerBase
         [FromForm] int jobDescriptionId,
         [FromForm] string? coverLetter,
         IFormFile cvFile)
-    {
-        // ── Validate file ─────────────────────────────────────
-        if (cvFile == null)
-            return BadRequest(new { message = "Vui lòng upload file CV." });
-
-        if (!FileHelper.IsValidCVFile(cvFile))
-            return BadRequest(new
-            {
-                message = "File không hợp lệ. Chỉ chấp nhận PDF/DOC/DOCX, tối đa 5MB."
-            });
-
-        // ── Kiểm tra JD tồn tại và còn mở ───────────────────
-        var jd = await _context.JobDescriptions
-            .FirstOrDefaultAsync(j => j.Id == jobDescriptionId
-                                   && j.Status == "OPEN");
-        if (jd == null)
-            return BadRequest(new { message = "JD không tồn tại hoặc đã đóng." });
-
-        // ── Lấy userId từ JWT ─────────────────────────────────
-        var userId = User.GetUserId();
-
-        // ── Kiểm tra đã nộp chưa ─────────────────────────────
-        var alreadyApplied = await _context.Applications
-            .AnyAsync(a => a.ApplicantUserId == userId
-                        && a.JobDescriptionId == jobDescriptionId);
-        if (alreadyApplied)
-            return BadRequest(new { message = "Bạn đã nộp CV cho vị trí này rồi." });
-
-        // ── Lưu file CV ───────────────────────────────────────
-        var uploadPath = _config["FileStorage:CVUploadPath"]
-            ?? "wwwroot/uploads/cv";
-        var savedFileName = await FileHelper.SaveCVFileAsync(cvFile, uploadPath);
-        var baseUrl = _config["FileStorage:BaseUrl"] ?? "";
-        var cvFileUrl = $"{baseUrl}/uploads/cv/{savedFileName}";
-
-        // ── Tạo Application ───────────────────────────────────
-        var application = new Application
+        => BadRequest(new
         {
-            ApplicantUserId = userId,
-            JobDescriptionId = jobDescriptionId,
-            CVFileUrl = cvFileUrl,
-            CoverLetter = coverLetter,
-            Status = "PENDING",
-            ApplyDate = DateTime.UtcNow,
-        };
+            message = "Chức năng intern nộp CV hiện đã được tạm khóa để phát triển lại."
+        });
 
-        _context.Applications.Add(application);
-        await _context.SaveChangesAsync();
-
-        // ── Auto Parse CV sau khi nộp ─────────────────────────
-        var filePath = Path.Combine(uploadPath, savedFileName);
-        try
+    private static string BuildJobDescriptionText(JobDescription jd)
+        => string.Join('\n', new[]
         {
-            var parsedData = await _aiService.ParseCVAsync(
-                filePath, application.Id);
-            _context.CVParsedDatas.Add(parsedData);
-            await _context.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            // Parse thất bại không ảnh hưởng đến việc nộp CV
-            Console.WriteLine($"⚠️ Parse CV failed: {ex.Message}");
-        }
-
-        return CreatedAtAction(nameof(GetById),
-            new { id = application.Id },
-            new
-            {
-                application.Id,
-                application.Status,
-                application.ApplyDate,
-                message = "Nộp CV thành công! Hệ thống đang xử lý.",
-            });
-    }
+            jd.Title,
+            jd.DetailContent,
+            jd.RequiredSkills,
+            jd.MinGPA.HasValue ? $"Minimum GPA {jd.MinGPA.Value}" : string.Empty,
+        }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
     // ─────────────────────────────────────────────────────────
     // PUT /api/applications/{id}/status
@@ -234,6 +184,36 @@ public class ApplicationsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = $"Đã cập nhật status → {app.Status}" });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // DELETE /api/applications/{id}
+    // HR xóa hồ sơ ứng viên
+    // ─────────────────────────────────────────────────────────
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin,HR")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var app = await _context.Applications
+            .Include(a => a.CVParsedData)
+            .Include(a => a.AIScreeningResult)
+            .FirstOrDefaultAsync(a => a.Id == id);
+
+        if (app == null)
+            return NotFound(new { message = $"Application #{id} không tồn tại." });
+
+        // Xóa các dữ liệu liên quan trước (do cascade delete)
+        if (app.AIScreeningResult != null)
+            _context.AIScreeningResults.Remove(app.AIScreeningResult);
+
+        if (app.CVParsedData != null)
+            _context.CVParsedDatas.Remove(app.CVParsedData);
+
+        // Xóa application
+        _context.Applications.Remove(app);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = $"Đã xóa hồ sơ ứng viên #{id}." });
     }
 }
 

@@ -1,22 +1,56 @@
+@using System.Text.Json
+
 @{
     ViewData["Title"] = "Chi tiết CV";
-    var app = Model as dynamic;
+    var app = Model is JsonElement json ? json : default;
+
+    string GetString(JsonElement item, string name)
+    {
+        return item.ValueKind == JsonValueKind.Object
+            && item.TryGetProperty(name, out var value)
+            && value.ValueKind != JsonValueKind.Null
+                ? value.ToString()
+                : "";
+    }
+
+    JsonElement GetObject(JsonElement item, string name)
+    {
+        return item.ValueKind == JsonValueKind.Object
+            && item.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Object
+                ? value
+                : default;
+    }
+
+    IEnumerable<string> SplitCsv(string value)
+    {
+        return (value ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    var parsedData = GetObject(app, "parsedData");
+    var screeningResult = GetObject(app, "screeningResult");
+    var jobDescriptionId = GetString(app, "jobDescriptionId");
+    var applicantStatus = GetString(app, "status");
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/hr-screening-cv-detail.css" />
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h5 class="fw-bold mb-0">
         <i class="bi bi-file-person text-primary me-2"></i>Chi tiết CV
     </h5>
-    <a asp-action="Ranking" asp-route-jdId="@app?.jobDescriptionId"
+    <a asp-action="Ranking" asp-route-jdId="@jobDescriptionId"
        class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Quay lại Ranking
     </a>
 </div>
 
-@if (app != null)
+@if (app.ValueKind == JsonValueKind.Object)
 {
 <div class="row g-4">
-    <!-- Thông tin ứng viên -->
     <div class="col-md-4">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold border-0 pt-3">
@@ -25,36 +59,26 @@
             <div class="card-body">
                 <div class="mb-2">
                     <small class="text-muted">Họ tên</small>
-                    <div class="fw-semibold">@app.applicantUser?.firstName @app.applicantUser?.lastName</div>
+                    <div class="fw-semibold">@GetString(app, "applicantName")</div>
                 </div>
                 <div class="mb-2">
                     <small class="text-muted">Email</small>
-                    <div>@app.applicantUser?.email</div>
+                    <div>@GetString(app, "applicantEmail")</div>
                 </div>
                 <div class="mb-2">
                     <small class="text-muted">GPA</small>
-                    <div>@app.applicantUser?.gpa</div>
+                    <div>@(string.IsNullOrWhiteSpace(GetString(app, "applicantGPA")) ? "-" : GetString(app, "applicantGPA"))</div>
                 </div>
                 <div class="mb-2">
                     <small class="text-muted">Ngày nộp</small>
-                    <div>@app.applyDate</div>
-                </div>
-                <div class="mb-3">
-                    <small class="text-muted">File CV</small>
-                    <div>
-                        <a href="@app.cvFileUrl" target="_blank"
-                           class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-download me-1"></i>Tải CV
-                        </a>
-                    </div>
+                    <div>@GetString(app, "applyDate")</div>
                 </div>
 
-                <!-- Cập nhật status -->
                 <hr />
                 <small class="text-muted fw-semibold">Cập nhật trạng thái</small>
                 <form asp-action="UpdateStatus" method="post" class="mt-2">
-                    <input type="hidden" name="applicationId" value="@app.id" />
-                    <input type="hidden" name="jdId" value="@app.jobDescriptionId" />
+                    <input type="hidden" name="applicationId" value="@GetString(app, "id")" />
+                    <input type="hidden" name="jdId" value="@jobDescriptionId" />
                     <select name="status" class="form-select form-select-sm mb-2">
                         <option value="PENDING">PENDING</option>
                         <option value="SCREENING">SCREENING</option>
@@ -66,14 +90,20 @@
                         Cập nhật
                     </button>
                 </form>
+                <div class="small text-muted mt-2">Hiện tại: @applicantStatus</div>
             </div>
         </div>
     </div>
 
-    <!-- Kết quả AI -->
     <div class="col-md-8">
-        @if (app.aiScreeningResult != null)
+        @if (screeningResult.ValueKind == JsonValueKind.Object)
         {
+            var matchingScore = double.TryParse(GetString(screeningResult, "matchingScore"), out var parsedScore)
+                ? parsedScore
+                : 0;
+            var scoreWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(matchingScore), 0, 100)}";
+            var processingStatus = GetString(screeningResult, "processingStatus");
+
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-white fw-semibold border-0 pt-3">
                     <i class="bi bi-robot text-success me-2"></i>Kết quả AI Screening
@@ -81,64 +111,92 @@
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <div class="display-4 fw-bold text-primary">
-                            @app.aiScreeningResult.matchingScore%
+                            @GetString(screeningResult, "matchingScore")%
                         </div>
                         <div class="text-muted">Matching Score</div>
-                        <div class="progress mt-2" style="height:12px">
-                            <div class="progress-bar @(app.aiScreeningResult.matchingScore >= 70 ? "bg-success" : "bg-warning")"
-                                 style="width:@(app.aiScreeningResult.matchingScore)%">
-                            </div>
+                        <div class="mt-1">
+                            <span class="badge @(processingStatus == "Completed" ? "bg-success" : processingStatus == "Failed" ? "bg-danger" : "bg-secondary")">
+                                @processingStatus
+                            </span>
+                        </div>
+                        <div class="progress mt-2 screening-score-progress">
+                            <div class="progress-bar @(matchingScore >= 70 ? "bg-success" : "bg-warning") @scoreWidthClass"></div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="p-3 bg-success bg-opacity-10 rounded mb-2">
-                                <small class="text-success fw-semibold">✅ Keywords Matched</small>
-                                <div class="mt-1">
-                                    @foreach (var kw in ((string)(app.aiScreeningResult.keywordsMatched ?? "")).Split(','))
-                                    {
-                                        <span class="badge bg-success me-1 mb-1">@kw.Trim()</span>
-                                    }
+
+                    @if (processingStatus == "Failed")
+                    {
+                        <div class="alert alert-danger mb-0">@GetString(screeningResult, "errorMessage")</div>
+                    }
+                    else
+                    {
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="p-3 bg-success bg-opacity-10 rounded mb-2">
+                                    <small class="text-success fw-semibold">Keywords Matched</small>
+                                    <div class="mt-1">
+                                        @foreach (var kw in SplitCsv(GetString(screeningResult, "keywordsMatched")))
+                                        {
+                                            <span class="badge bg-success me-1 mb-1">@kw</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 bg-danger bg-opacity-10 rounded mb-2">
+                                    <small class="text-danger fw-semibold">Keywords Missing</small>
+                                    <div class="mt-1">
+                                        @foreach (var kw in SplitCsv(GetString(screeningResult, "keywordsMissing")))
+                                        {
+                                            <span class="badge bg-danger me-1 mb-1">@kw</span>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="p-3 bg-danger bg-opacity-10 rounded mb-2">
-                                <small class="text-danger fw-semibold">❌ Keywords Missing</small>
-                                <div class="mt-1">
-                                    @foreach (var kw in ((string)(app.aiScreeningResult.keywordsMissing ?? "")).Split(','))
-                                    {
-                                        <span class="badge bg-danger me-1 mb-1">@kw.Trim()</span>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    }
                 </div>
             </div>
         }
 
-        <!-- CV Parsed Data -->
-        @if (app.cVParsedData != null)
+        @if (parsedData.ValueKind == JsonValueKind.Object)
         {
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white fw-semibold border-0 pt-3">
                     <i class="bi bi-file-text me-2"></i>Nội dung CV đã phân tích
                 </div>
                 <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <small class="text-muted fw-semibold">Email bóc tách</small>
+                            <div>@GetString(parsedData, "emailExtracted")</div>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted fw-semibold">Số điện thoại</small>
+                            <div>@GetString(parsedData, "phoneExtracted")</div>
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <small class="text-muted fw-semibold">Skills</small>
                         <div class="mt-1">
-                            @foreach (var s in ((string)(app.cVParsedData.skillsExtracted ?? "")).Split(','))
+                            @foreach (var s in SplitCsv(GetString(parsedData, "skillsExtracted")))
                             {
-                                <span class="badge bg-primary me-1 mb-1">@s.Trim()</span>
+                                <span class="badge bg-primary me-1 mb-1">@s</span>
                             }
                         </div>
                     </div>
                     <div class="mb-3">
-                        <small class="text-muted fw-semibold">Raw Text (trích đoạn)</small>
-                        <div class="bg-light p-3 rounded mt-1" style="font-size:.85rem;max-height:200px;overflow-y:auto">
-                            @app.cVParsedData.rawText
+                        <small class="text-muted fw-semibold">Education</small>
+                        <div class="text-muted">@GetString(parsedData, "educationExtracted")</div>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted fw-semibold">Experience</small>
+                        <div class="text-muted">@GetString(parsedData, "experienceExtracted")</div>
+                    </div>
+                    <div>
+                        <small class="text-muted fw-semibold">Raw Text</small>
+                        <div class="bg-light p-3 rounded mt-1 cv-raw-text">
+                            @GetString(parsedData, "rawText")
                         </div>
                     </div>
                 </div>
@@ -146,4 +204,8 @@
         }
     </div>
 </div>
+}
+else
+{
+    <div class="alert alert-warning">Không tải được dữ liệu CV.</div>
 }

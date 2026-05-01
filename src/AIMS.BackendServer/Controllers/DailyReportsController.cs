@@ -14,9 +14,32 @@ namespace AIMS.BackendServer.Controllers;
 public class DailyReportsController : ControllerBase
 {
     private readonly AimsDbContext _context;
+    private static readonly TimeZoneInfo VietnamTimeZone = ResolveVietnamTimeZone();
 
     public DailyReportsController(AimsDbContext context)
         => _context = context;
+
+    private Task<List<string>> GetMentorInternIdsAsync(string mentorId)
+        => _context.InternAssignments
+            .Where(a => a.MentorUserId == mentorId)
+            .Select(a => a.InternUserId)
+            .Distinct()
+            .ToListAsync();
+
+    private static TimeZoneInfo ResolveVietnamTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+        }
+    }
+
+    private static DateTime GetVietnamToday()
+        => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, VietnamTimeZone).Date;
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
@@ -31,9 +54,21 @@ public class DailyReportsController : ControllerBase
             .AsQueryable();
 
         if (User.IsInRole("Intern"))
+        {
             query = query.Where(r => r.InternUserId == userId);
+        }
+        else if (User.IsInRole("Mentor"))
+        {
+            var mentorInternIds = await GetMentorInternIdsAsync(userId);
+            query = query.Where(r => mentorInternIds.Contains(r.InternUserId));
+
+            if (!string.IsNullOrEmpty(internId))
+                query = query.Where(r => r.InternUserId == internId);
+        }
         else if (!string.IsNullOrEmpty(internId))
+        {
             query = query.Where(r => r.InternUserId == internId);
+        }
 
         if (from.HasValue)
             query = query.Where(r => r.ReportDate >= from.Value);
@@ -63,6 +98,8 @@ public class DailyReportsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        var userId = User.GetUserId();
+
         var report = await _context.DailyReports
             .Include(r => r.InternUser)
             .Include(r => r.ReviewedByMentor)
@@ -70,6 +107,20 @@ public class DailyReportsController : ControllerBase
 
         if (report == null)
             return NotFound(new { message = $"Báo cáo #{id} không tồn tại." });
+
+        if (User.IsInRole("Intern") && report.InternUserId != userId)
+            return Forbid();
+
+        if (User.IsInRole("Mentor"))
+        {
+            var canAccess = await _context.InternAssignments
+                .AnyAsync(a =>
+                    a.MentorUserId == userId &&
+                    a.InternUserId == report.InternUserId);
+
+            if (!canAccess)
+                return Forbid();
+        }
 
         return Ok(new DailyReportVm
         {
@@ -91,7 +142,7 @@ public class DailyReportsController : ControllerBase
         [FromBody] CreateDailyReportRequest request)
     {
         var userId = User.GetUserId();  // ⭐
-        var reportDate = request.ReportDate?.Date ?? DateTime.UtcNow.Date;
+        var reportDate = request.ReportDate?.Date ?? GetVietnamToday();
 
         var exists = await _context.DailyReports
             .AnyAsync(r =>
@@ -131,6 +182,17 @@ public class DailyReportsController : ControllerBase
         var report = await _context.DailyReports.FindAsync(id);
         if (report == null)
             return NotFound(new { message = $"Báo cáo #{id} không tồn tại." });
+
+        if (User.IsInRole("Mentor"))
+        {
+            var canAccess = await _context.InternAssignments
+                .AnyAsync(a =>
+                    a.MentorUserId == mentorId &&
+                    a.InternUserId == report.InternUserId);
+
+            if (!canAccess)
+                return Forbid();
+        }
 
         report.MentorFeedback = request.Feedback;
         report.ReviewedByMentorId = mentorId;

@@ -15,6 +15,8 @@ public class ApplicationVm
     public DateTime ApplyDate { get; set; }
     public decimal? MatchingScore { get; set; }  // Từ AIScreeningResult
     public int? Ranking { get; set; }
+    public string? ScreeningProcessingStatus { get; set; }
+    public string? ScreeningErrorMessage { get; set; }
 }
 
 public class SubmitApplicationRequest

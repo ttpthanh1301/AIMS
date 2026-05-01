@@ -116,20 +116,20 @@ public class PermissionMiddleware
             _ when path.Contains("/api/functions") => "SYSTEM_PERMISSION",
 
             // ── Tuyển dụng (HR) ───────────────────────────────
-            _ when path.Contains("/api/jobdescriptions") => "RECRUITMENT_JD",
-            _ when path.Contains("/api/applications") => "RECRUITMENT_CV",
-            _ when path.Contains("/api/screening") => "RECRUITMENT_CV",
+            _ when path.Contains("/api/jobdescriptions") => "JOB_DESCRIPTION",
+            _ when path.Contains("/api/applications") => "CV_SCREENING",
+            _ when path.Contains("/api/screening") => "CV_SCREENING",
 
             // ── LMS (Mentor tạo/sửa) ──────────────────────────
-            _ when path.Contains("/api/courses") => "LMS_COURSES",
-            _ when path.Contains("/api/lessons") => "LMS_COURSES",
-            _ when path.Contains("/api/quizbanks") => "LMS_QUIZ",
+            _ when path.Contains("/api/courses") => null,
+            _ when path.Contains("/api/lessons") => null,
+            _ when path.Contains("/api/quizbanks") => null,
 
             // ── Task (Mentor tạo task) ─────────────────────────
-            _ when path.Contains("/api/tasks") => "TASKS_BOARD",
+            _ when path.Contains("/api/tasks") => "INTERN_TASK",
 
             // ── Daily Report (Mentor xem/feedback) ────────────
-            _ when path.Contains("/api/dailyreports") => "TASKS_REPORT",
+            _ when path.Contains("/api/dailyreports") => "DAILY_REPORT",
 
             // ── Tất cả các endpoint dưới đây dùng [Authorize(Roles)]
             // trong controller tự xử lý → middleware KHÔNG check thêm

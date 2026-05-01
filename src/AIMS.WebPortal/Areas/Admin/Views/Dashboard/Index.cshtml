@@ -1,0 +1,145 @@
+@model AdminDashboardVm
+@{
+    var totalUsers = Model.Users.TotalInterns + Model.Users.TotalMentors;
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/admin-dashboard.css" />
+}
+
+<div class="admin-hero">
+    <div class="row g-4 align-items-center">
+        <div class="col-lg-8">
+            <div class="d-inline-flex align-items-center gap-2 rounded-pill px-3 py-2 mb-3 admin-hero-badge">
+                <i class="bi bi-shield-check"></i>
+                <span class="fw-semibold">Quản trị hệ thống</span>
+            </div>
+            <h1 class="h2 fw-bold mb-2">Tổng quan vận hành AIMS</h1>
+        </div>
+        <div class="col-lg-4">
+            <div class="card border-0 h-100 admin-active-period-card">
+                <div class="card-body">
+                    <div class="text-uppercase small fw-semibold mb-2 admin-active-period-label">Kỳ đang hoạt động</div>
+                    @if (Model.ActivePeriod != null)
+                    {
+                        <div class="h4 fw-bold mb-1">@Model.ActivePeriod.Name</div>
+                        <div class="small mb-3 admin-active-period-date">
+                            @Model.ActivePeriod.StartDate.ToString("dd/MM/yyyy") - @Model.ActivePeriod.EndDate.ToString("dd/MM/yyyy")
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Số intern</span>
+                            <strong>@Model.ActivePeriod.TotalInterns</strong>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="small admin-active-period-empty">Chưa có kỳ thực tập đang mở.</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-xl-3">
+        <div class="card metric-card">
+            <div class="text-muted small mb-2">Intern đang quản lý</div>
+            <div class="metric-value">@Model.Users.TotalInterns</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card metric-card">
+            <div class="text-muted small mb-2">Mentor đang hoạt động</div>
+            <div class="metric-value">@Model.Users.TotalMentors</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card metric-card">
+            <div class="text-muted small mb-2">Task đã hoàn thành</div>
+            <div class="metric-value">@Model.Tasks.Done</div>
+            <div class="small text-muted mt-2">Tổng @Model.Tasks.Total task</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="card metric-card">
+            <div class="text-muted small mb-2">CV đang chờ xử lý</div>
+            <div class="metric-value">@Model.Recruitment.PendingCVs</div>
+            <div class="small text-muted mt-2">@Model.Recruitment.OpenJDs JD đang mở</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h5 class="fw-bold mb-1">Chỉ số trọng yếu</h5>
+                    </div>
+                    <span class="badge rounded-pill">@totalUsers người dùng</span>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="rounded-4 p-3 admin-insight-card admin-insight-card--recruitment">
+                            <div class="fw-semibold mb-2">Tuyển dụng</div>
+                            <div class="small text-muted mb-1">CV đã screening: @Model.Recruitment.ScreenedCVs</div>
+                            <div class="small text-muted">JD đang mở: @Model.Recruitment.OpenJDs</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="rounded-4 p-3 admin-insight-card admin-insight-card--lms">
+                            <div class="fw-semibold mb-2">LMS</div>
+                            <div class="small text-muted mb-1">Khóa học: @Model.LMS.TotalCourses</div>
+                            <div class="small text-muted">Chứng chỉ: @Model.LMS.TotalCertificates</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="rounded-4 p-3 admin-insight-card admin-insight-card--task">
+                            <div class="fw-semibold mb-2">Task</div>
+                            <div class="small text-muted mb-1">Quá hạn: @Model.Tasks.Overdue</div>
+                            <div class="small text-muted">Hoàn thành: @Model.Tasks.Done</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="rounded-4 p-3 admin-insight-card admin-insight-card--period">
+                            <div class="fw-semibold mb-2">Kỳ thực tập</div>
+                            <div class="small text-muted mb-1">
+                                @(Model.ActivePeriod?.Name ?? "Chưa kích hoạt")
+                            </div>
+                            <div class="small text-muted">
+                                Intern trong kỳ: @(Model.ActivePeriod?.TotalInterns ?? 0)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="fw-bold mb-3">Truy cập nhanh</h5>
+                <div class="d-grid gap-3">
+                    <a class="quick-link" asp-area="Admin" asp-controller="User" asp-action="Index">
+                        <span><i class="bi bi-people me-2 text-primary"></i>Người dùng</span>
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                    <a class="quick-link" asp-area="Admin" asp-controller="InternshipPeriod" asp-action="Index">
+                        <span><i class="bi bi-calendar-range me-2 text-primary"></i>Kỳ thực tập</span>
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                    <a class="quick-link" asp-area="Admin" asp-controller="InternAssignment" asp-action="Index">
+                        <span><i class="bi bi-diagram-3 me-2 text-primary"></i>Phân công intern</span>
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                    <a class="quick-link" asp-area="Admin" asp-controller="Role" asp-action="Index">
+                        <span><i class="bi bi-key me-2 text-primary"></i>Roles hệ thống</span>
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

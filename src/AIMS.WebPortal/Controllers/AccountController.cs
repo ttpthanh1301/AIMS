@@ -55,13 +55,19 @@ public class AccountController : Controller
                 new AuthenticationProperties { IsPersistent = true });
 
             // Redirect theo Role
-            return auth.Roles.FirstOrDefault() switch
-            {
-                "HR" => RedirectToAction("Index", "JobDescription", new { area = "HR" }),
-                "Mentor" => RedirectToAction("Index", "Dashboard", new { area = "Mentor" }),
-                "Intern" => RedirectToAction("Index", "LMS", new { area = "Intern" }),
-                _ => RedirectToAction("Index", "Home"),
-            };
+            if (auth.Roles.Contains("Admin"))
+                return RedirectToAction("Index", "Dashboard", new { area = "Admin" });
+
+            if (auth.Roles.Contains("HR"))
+                return RedirectToAction("Index", "JobDescription", new { area = "HR" });
+
+            if (auth.Roles.Contains("Mentor"))
+                return RedirectToAction("Index", "Dashboard", new { area = "Mentor" });
+
+            if (auth.Roles.Contains("Intern"))
+                return RedirectToAction("Index", "Task", new { area = "Intern" });
+
+            return RedirectToAction("Index", "Home");
         }
         catch
         {

@@ -1,0 +1,217 @@
+    .intern-report-page {
+        display: grid;
+        gap: 1.5rem;
+    }
+    .intern-report-hero {
+        border-radius: 24px;
+        padding: 1.6rem;
+        background:
+            radial-gradient(circle at top right, rgba(142, 199, 64, .18), transparent 24%),
+            linear-gradient(135deg, rgba(31, 124, 192, .12), rgba(31, 124, 192, .03));
+        border: 1px solid rgba(31, 124, 192, .12);
+    }
+
+    .intern-report-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        padding: .42rem .75rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,.78);
+        color: #145f98;
+        font-size: .78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .intern-report-title {
+        margin: 1rem 0 .35rem;
+        font-size: clamp(1.65rem, 2vw, 2.15rem);
+        font-weight: 800;
+        color: #17324d;
+    }
+
+    .intern-report-subtitle {
+        color: #668198;
+        margin: 0;
+        line-height: 1.65;
+        max-width: 760px;
+    }
+
+    .intern-report-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .9rem;
+        margin-top: 1.4rem;
+    }
+
+    .intern-report-stat {
+        border-radius: 18px;
+        background: rgba(255,255,255,.82);
+        border: 1px solid rgba(31,124,192,.08);
+        padding: 1rem 1rem .95rem;
+    }
+
+    .intern-report-stat-label {
+        color: #6f859a;
+        font-size: .8rem;
+        font-weight: 600;
+        margin-bottom: .25rem;
+    }
+
+.intern-report-stat-value {
+    font-size: 1.55rem;
+    line-height: 1;
+    font-weight: 800;
+    color: #17324d;
+}
+
+.intern-report-stat-value--compact {
+    font-size: 1.08rem;
+}
+
+.intern-report-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .intern-report-panel {
+        border-radius: 22px;
+        overflow: hidden;
+    }
+
+    .intern-report-panel .card-header {
+        padding: 1.15rem 1.35rem 0;
+    }
+
+    .intern-report-panel-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #17324d;
+    }
+
+    .intern-report-panel-subtitle {
+        display: block;
+        margin-top: .18rem;
+        color: #7490a4;
+        font-size: .82rem;
+    }
+
+    .intern-report-panel .card-body {
+        padding: 1.2rem 1.35rem 1.35rem;
+    }
+
+    .intern-report-lock {
+        border-radius: 18px;
+        padding: 1rem 1rem .95rem;
+        background: linear-gradient(135deg, rgba(142,199,64,.12), rgba(31,124,192,.08));
+        border: 1px solid rgba(142,199,64,.18);
+        color: #284359;
+    }
+
+    .intern-report-today {
+        border-radius: 18px;
+        border: 1px solid rgba(31,124,192,.08);
+        background: linear-gradient(180deg, rgba(31,124,192,.03), rgba(255,255,255,.96));
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .intern-report-history {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .intern-report-item {
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .intern-report-item .card-body {
+        padding: 1.15rem 1.2rem;
+    }
+
+    .intern-report-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: start;
+        margin-bottom: .8rem;
+    }
+
+    .intern-report-date {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        color: #17324d;
+        font-weight: 700;
+    }
+
+    .intern-report-status {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .4rem .68rem;
+        border-radius: 999px;
+        font-size: .76rem;
+        font-weight: 700;
+    }
+
+    .intern-report-status.pending {
+        background: rgba(143, 157, 171, .14);
+        color: #647789;
+    }
+
+    .intern-report-status.done {
+        background: rgba(142,199,64,.16);
+        color: #5d881f;
+    }
+
+    .intern-report-feedback {
+        margin-top: .85rem;
+        border-radius: 16px;
+        padding: 1rem;
+        background:
+            linear-gradient(135deg, rgba(31,124,192,.11), rgba(142,199,64,.11)),
+            #fff;
+        border: 1px solid rgba(31,124,192,.12);
+        color: #284359;
+    }
+
+    .intern-report-feedback-label {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        color: #145f98;
+        font-size: .82rem;
+        font-weight: 800;
+        margin-bottom: .45rem;
+        text-transform: uppercase;
+    }
+
+    .intern-report-empty {
+        border-radius: 20px;
+        border: 1px dashed rgba(31,124,192,.18);
+        padding: 2rem 1.5rem;
+        text-align: center;
+        color: #6f859a;
+        background: rgba(255,255,255,.72);
+    }
+
+    @media (max-width: 1199.98px) {
+        .intern-report-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .intern-report-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .intern-report-stats {
+            grid-template-columns: 1fr;
+        }
+    }

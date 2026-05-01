@@ -1,0 +1,78 @@
+@model List<AIMS.ViewModels.LMS.MentorCourseProgressVm>
+@{
+    ViewData["Title"] = "Danh sách Khóa học - Mentor";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-progress-courses.css" />
+}
+
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2 class="mb-3"><i class="fas fa-book-reader"></i> Khóa học của Thực tập sinh</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/Mentor/Progress/Dashboard">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Danh sách khóa học</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        @if (Model != null && Model.Count > 0)
+        {
+            foreach (var course in Model)
+            {
+                var progressWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(course.AverageCompletionPercent), 0, 100)}";
+                var percentColor = course.AverageCompletionPercent >= 100 ? "success" :
+                                 course.AverageCompletionPercent >= 50 ? "warning" : "primary";
+                
+                string statusClass = course.AverageCompletionPercent == 0 ? "bg-secondary" : 
+                                   (course.AverageCompletionPercent >= 100 ? "bg-success" : "bg-primary");
+                string statusText = course.AverageCompletionPercent == 0 ? "Chưa bắt đầu" : 
+                                  (course.AverageCompletionPercent >= 100 ? "Hoàn thành" : "Đang học");
+
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title text-primary fw-bold">@course.CourseTitle</h5>
+                            <p class="card-text text-muted small mb-3">@(course.Description ?? "Không có mô tả")</p>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge bg-secondary">Cấp độ: @course.Level</span>
+                                <span class="badge @statusClass">@statusText</span>
+                            </div>
+
+                            <div class="mt-auto">
+                                <ul class="list-unstyled small mb-3">
+                                    <li><i class="fas fa-users text-muted w-20px"></i> Số lượng Intern: <strong>@course.TotalInterns</strong></li>
+                                    <li><i class="fas fa-check-circle text-success w-20px"></i> Hoàn thành: <strong>@course.CompletedInterns</strong></li>
+                                </ul>
+
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span class="text-muted">Trung bình lớp</span>
+                                    <strong>@string.Format("{0:F0}%", course.AverageCompletionPercent)</strong>
+                                </div>
+                                <div class="progress mb-3 mentor-course-progress-bar">
+                                    <div class="progress-bar bg-@percentColor @progressWidthClass" role="progressbar"></div>
+                                </div>
+                                <a href="/Mentor/Progress/CourseDetail/@course.CourseId" class="btn btn-outline-primary w-100">
+                                    <i class="fas fa-list-ol"></i> Xem chi tiết học viên
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-12">
+                <div class="alert alert-info"><i class="fas fa-info-circle"></i> Chưa có khóa học nào được giao.</div>
+            </div>
+        }
+    </div>
+</div>

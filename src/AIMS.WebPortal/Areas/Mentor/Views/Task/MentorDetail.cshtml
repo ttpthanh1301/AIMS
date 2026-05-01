@@ -1,0 +1,18 @@
+@model AIMS.WebPortal.Models.Admin.MentorDetailVm
+
+@{
+    ViewData["Title"] = "Mentor Detail";
+}
+
+<h1>@Model.FullName</h1>
+<p><strong>Email:</strong> @Model.Email</p>
+<p><strong>Phone:</strong> @Model.PhoneNumber</p>
+<p><strong>Role:</strong> @Model.Role</p>
+
+<h2>Assigned Interns</h2>
+<ul>
+    @foreach (var intern in Model.AssignedInterns)
+    {
+        <li>@intern.InternName (@intern.InternEmail)</li>
+    }
+</ul>

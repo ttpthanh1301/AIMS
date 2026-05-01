@@ -4,6 +4,16 @@
     ViewData["Title"] = "Chỉnh sửa Quiz";
     var quiz = Model;
     var courses = ViewBag.Courses as List<CourseVm> ?? new List<CourseVm>();
+    var selectedLessonId = quiz?.LessonId?.ToString() ?? string.Empty;
+    var selectedChapterId = courses
+        .FirstOrDefault(c => c.Id == quiz?.CourseId)?
+        .Chapters?
+        .FirstOrDefault(ch => ch.Lessons.Any(l => l.Id == quiz?.LessonId))?
+        .Id.ToString() ?? string.Empty;
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-quiz-edit.css" />
 }
 
 <div class="d-flex justify-content-between mb-4">
@@ -15,14 +25,14 @@
     </a>
 </div>
 
-<div class="card border-0 shadow-sm" style="max-width:600px">
+<div class="card border-0 shadow-sm mentor-quiz-edit-card">
     <div class="card-body">
         <form asp-action="Edit" method="post">
             <input type="hidden" name="quizId" value="@quiz?.Id" />
 
             <div class="mb-3">
                 <label class="form-label fw-semibold">Khóa học</label>
-                <select name="courseId" class="form-select" required>
+                <select name="courseId" id="courseId" class="form-select" required>
                     <option value="">-- Chọn khóa học --</option>
                     @foreach (var c in courses)
                     {
@@ -36,6 +46,21 @@
                         }
                     }
                 </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Chương</label>
+                <select id="chapterId" class="form-select" disabled>
+                    <option value="">-- Chọn chương --</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Bài học</label>
+                <select name="lessonId" id="lessonId" class="form-select">
+                    <option value="">-- Gắn theo khóa học chung --</option>
+                </select>
+                <div class="form-text">Có thể bỏ trống nếu quiz áp dụng cho toàn khóa học.</div>
             </div>
 
             <div class="mb-3">
@@ -70,3 +95,93 @@
         </form>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    const courseSelect = document.getElementById('courseId');
+    const chapterSelect = document.getElementById('chapterId');
+    const lessonSelect = document.getElementById('lessonId');
+    const selectedLessonId = '@selectedLessonId';
+    let selectedChapterId = '@selectedChapterId';
+    let chapterData = [];
+
+    courseSelect?.addEventListener('change', () => loadChapters(courseSelect.value));
+    chapterSelect?.addEventListener('change', () => populateLessons(chapterSelect.value));
+
+    if (courseSelect?.value) {
+        loadChapters(courseSelect.value, selectedChapterId, selectedLessonId);
+    }
+
+    async function loadChapters(courseId, currentChapterId = '', currentLessonId = '') {
+        chapterSelect.innerHTML = '<option value="">-- Chọn chương --</option>';
+        lessonSelect.innerHTML = '<option value="">-- Gắn theo khóa học chung --</option>';
+        chapterData = [];
+
+        if (!courseId) {
+            chapterSelect.disabled = true;
+            lessonSelect.disabled = true;
+            return;
+        }
+
+        chapterSelect.disabled = true;
+        lessonSelect.disabled = true;
+        try {
+            const response = await fetch(`/Mentor/Quiz/LessonsByCourse?courseId=${courseId}`);
+            chapterData = await response.json();
+
+            chapterData.forEach(chapter => {
+                const option = document.createElement('option');
+                option.value = chapter.id;
+                option.textContent = chapter.label;
+                if (String(chapter.id) === String(currentChapterId)) {
+                    option.selected = true;
+                }
+                chapterSelect.appendChild(option);
+            });
+
+            if (!currentChapterId && currentLessonId) {
+                const matchedChapter = chapterData.find(chapter =>
+                    (chapter.lessons || []).some(lesson => String(lesson.id) === String(currentLessonId)));
+                if (matchedChapter) {
+                    currentChapterId = String(matchedChapter.id);
+                    selectedChapterId = currentChapterId;
+                    chapterSelect.value = currentChapterId;
+                }
+            }
+
+            chapterSelect.disabled = false;
+            populateLessons(currentChapterId || chapterSelect.value, currentLessonId);
+        } catch {
+            chapterSelect.disabled = true;
+        } finally {
+        }
+    }
+
+    function populateLessons(chapterId, currentLessonId = '') {
+        lessonSelect.innerHTML = '<option value="">-- Gắn theo khóa học chung --</option>';
+
+        if (!chapterId) {
+            lessonSelect.disabled = false;
+            return;
+        }
+
+        const chapter = chapterData.find(item => String(item.id) === String(chapterId));
+        if (!chapter) {
+            lessonSelect.disabled = false;
+            return;
+        }
+
+        chapter.lessons.forEach(lesson => {
+            const option = document.createElement('option');
+            option.value = lesson.id;
+            option.textContent = lesson.label;
+            if (String(lesson.id) === String(currentLessonId)) {
+                option.selected = true;
+            }
+            lessonSelect.appendChild(option);
+        });
+
+        lessonSelect.disabled = false;
+    }
+</script>
+}

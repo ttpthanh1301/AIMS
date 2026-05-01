@@ -1,16 +1,26 @@
 @using AIMS.ViewModels.TaskManagement
+@using System.Text.Json
 @model MentorDashboardVm
 @{
     ViewData["Title"] = "Dashboard Mentor";
-    var data           = Model;
+    var data = Model;
     var pendingReports = ViewBag.PendingReports as List<DailyReportVm>
         ?? new List<DailyReportVm>();
+    var interns = data?.Interns ?? new List<InternStatVm>();
+    var topInterns = interns
+        .OrderByDescending(i => i.CompletionRate)
+        .ThenByDescending(i => i.TotalHours)
+        .Take(3)
+        .ToList();
 }
 
-@* ⭐ Thông báo report chưa feedback *@
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-dashboard.css" />
+}
+
 @if (pendingReports.Any())
 {
-    <div class="alert alert-warning alert-dismissible d-flex align-items-center gap-3 mb-4">
+    <div class="alert alert-warning alert-dismissible d-flex align-items-center gap-3 mb-0 mentor-report-alert">
         <i class="bi bi-bell-fill fs-4"></i>
         <div class="flex-grow-1">
             <strong>@pendingReports.Count báo cáo chưa được phản hồi!</strong>
@@ -27,106 +37,353 @@
                 }
             </div>
         </div>
-        <a asp-action="DailyReports" class="btn btn-warning btn-sm">
+        <a asp-action="DailyReports" class="btn btn-primary btn-sm">
             <i class="bi bi-eye me-1"></i>Xem ngay
         </a>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
 
+<div class="mentor-dashboard">
+    <section class="mentor-hero">
+        <span class="mentor-kicker">
+            <i class="bi bi-bar-chart-line-fill"></i> Mentor Workspace
+        </span>
+        <h1 class="mentor-title">Dashboard quản lý thực tập</h1>
+        <div class="mentor-hero-actions">
+            <a asp-action="Timesheets" class="btn btn-primary">
+                <i class="bi bi-clock-history me-1"></i>Xem timesheet
+            </a>
+            <a asp-action="DailyReports" class="btn btn-outline-primary">
+                <i class="bi bi-journal-richtext me-1"></i>Daily reports
+            </a>
+        </div>
+        @if (data != null)
+        {
+            <div class="mentor-chip-grid">
+                <div class="mentor-chip">
+                    <span class="mentor-chip-label">Tổng Intern</span>
+                    <span class="mentor-chip-value">@data.Summary.TotalInterns</span>
+                </div>
+                <div class="mentor-chip">
+                    <span class="mentor-chip-label">Tổng Task</span>
+                    <span class="mentor-chip-value">@data.Summary.TotalTasks</span>
+                </div>
+                <div class="mentor-chip">
+                    <span class="mentor-chip-label">Tỷ lệ hoàn thành trung bình</span>
+                    <span class="mentor-chip-value">@data.Summary.AvgCompletion.ToString("0.#")%</span>
+                </div>
+            </div>
+        }
+    </section>
+
+    @if (pendingReports.Any())
+    {
+        <section>
+            <div class="d-grid">
+                <div></div>
+            </div>
+        </section>
+    }
+
 @if (data != null)
 {
-    <div class="row g-4 mb-4">
+    <div class="row g-4">
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm">
+            <div class="card mentor-metric-card">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="rounded-3 bg-primary bg-opacity-10 p-3">
-                        <i class="bi bi-people text-primary fs-3"></i>
+                    <div class="mentor-metric-icon mentor-metric-icon--interns">
+                        <i class="bi bi-people"></i>
                     </div>
                     <div>
-                        <div class="text-muted small">Tổng Intern</div>
-                        <div class="fs-4 fw-bold">@data.Summary.TotalInterns</div>
+                        <div class="mentor-metric-label">Tổng Intern</div>
+                        <div class="mentor-metric-value">@data.Summary.TotalInterns</div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm">
+            <div class="card mentor-metric-card">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="rounded-3 bg-success bg-opacity-10 p-3">
-                        <i class="bi bi-check-circle text-success fs-3"></i>
+                    <div class="mentor-metric-icon mentor-metric-icon--tasks">
+                        <i class="bi bi-list-check"></i>
                     </div>
                     <div>
-                        <div class="text-muted small">Task Done</div>
-                        <div class="fs-4 fw-bold">@data.Summary.TotalDone</div>
+                        <div class="mentor-metric-label">Task hoàn thành</div>
+                        <div class="mentor-metric-value">@data.Summary.TotalDone</div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm">
+            <div class="card mentor-metric-card">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="rounded-3 bg-danger bg-opacity-10 p-3">
-                        <i class="bi bi-exclamation-triangle text-danger fs-3"></i>
+                    <div class="mentor-metric-icon mentor-metric-icon--overdue">
+                        <i class="bi bi-exclamation-triangle"></i>
                     </div>
                     <div>
-                        <div class="text-muted small">Overdue</div>
-                        <div class="fs-4 fw-bold">@data.Summary.TotalOverdue</div>
+                        <div class="mentor-metric-label">Task quá hạn</div>
+                        <div class="mentor-metric-value">@data.Summary.TotalOverdue</div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm">
+            <div class="card mentor-metric-card">
                 <div class="card-body d-flex align-items-center gap-3">
-                    <div class="rounded-3 bg-warning bg-opacity-10 p-3">
-                        <i class="bi bi-journal-text text-warning fs-3"></i>
+                    <div class="mentor-metric-icon mentor-metric-icon--hours">
+                        <i class="bi bi-graph-up-arrow"></i>
                     </div>
                     <div>
-                        <div class="text-muted small">Chờ feedback</div>
-                        <div class="fs-4 fw-bold">@pendingReports.Count</div>
+                        <div class="mentor-metric-label">Hoàn thành TB</div>
+                        <div class="mentor-metric-value">@data.Summary.AvgCompletion.ToString("0.#")%</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white fw-semibold border-0 pt-3">
-            <i class="bi bi-bar-chart text-primary me-2"></i>Hiệu suất từng Intern
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="card mentor-panel h-100">
+                <div class="card-header border-0">
+                    <div>
+                        <div class="mentor-panel-title">
+                            <i class="bi bi-bar-chart text-primary me-2"></i>Hiệu suất từng Intern
+                        </div>
+                        <span class="mentor-panel-subtitle">
+                            So sánh tỷ lệ hoàn thành và số giờ đã log theo từng intern.
+                        </span>
+                    </div>
+                    <span class="mentor-status-badge">
+                        <i class="bi bi-activity"></i>@interns.Count intern
+                    </span>
+                </div>
+                <div class="mentor-chart-wrap">
+                    <canvas id="internChart"></canvas>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <canvas id="internChart" height="100"></canvas>
+
+        <div class="col-xl-4">
+            <div class="card mentor-panel h-100">
+                <div class="card-header border-0">
+                    <div>
+                        <div class="mentor-panel-title">
+                            <i class="bi bi-trophy-fill text-primary me-2"></i>Top Intern
+                        </div>
+                    </div>
+                </div>
+                <div class="mentor-side-list">
+                    @if (topInterns.Any())
+                    {
+                        @foreach (var intern in topInterns)
+                        {
+                            var completionWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(intern.CompletionRate), 0, 100)}";
+
+                            <div class="mentor-intern-card">
+                                <div class="mentor-intern-row">
+                                    <div>
+                                        <div class="mentor-intern-name">@intern.InternName</div>
+                                        <div class="mentor-intern-email">@intern.InternEmail</div>
+                                    </div>
+                                    <span class="mentor-score">@intern.CompletionRate.ToString("0.#")%</span>
+                                </div>
+                                <div class="mentor-progress">
+                                    <div class="mentor-progress-bar @completionWidthClass"></div>
+                                </div>
+                                <div class="mentor-intern-stats">
+                                    <div class="mentor-mini-stat">
+                                        <div class="mentor-mini-stat-label">Task</div>
+                                        <div class="mentor-mini-stat-value">@intern.TotalTasks</div>
+                                    </div>
+                                    <div class="mentor-mini-stat">
+                                        <div class="mentor-mini-stat-label">Done</div>
+                                        <div class="mentor-mini-stat-value">@intern.DoneTasks</div>
+                                    </div>
+                                    <div class="mentor-mini-stat">
+                                        <div class="mentor-mini-stat-label">Giờ log</div>
+                                        <div class="mentor-mini-stat-value">@intern.TotalHours</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0">
+                            Chưa có dữ liệu intern để hiển thị xếp hạng.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mentor-table-card">
+        <div class="card-header border-0">
+            <div>
+                <div class="mentor-panel-title">
+                    <i class="bi bi-table text-primary me-2"></i>Tổng quan theo intern
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Intern</th>
+                        <th>Email</th>
+                        <th>Tổng task</th>
+                        <th>TODO</th>
+                        <th>In progress</th>
+                        <th>Done</th>
+                        <th>Overdue</th>
+                        <th>Completion</th>
+                        <th>Giờ làm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (interns.Any())
+                    {
+                        @foreach (var intern in interns.OrderByDescending(i => i.CompletionRate).ThenBy(i => i.InternName))
+                        {
+                            <tr>
+                                <td class="fw-semibold text-primary">@intern.InternName</td>
+                                <td class="text-muted">@intern.InternEmail</td>
+                                <td>@intern.TotalTasks</td>
+                                <td>@intern.TodoTasks</td>
+                                <td>@intern.InProgressTasks</td>
+                                <td>@intern.DoneTasks</td>
+                                <td>@intern.OverdueTasks</td>
+                                <td>
+                                    <span class="mentor-status-badge">@intern.CompletionRate.ToString("0.#")%</span>
+                                </td>
+                                <td>@intern.TotalHours h</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                Chưa có dữ liệu dashboard của mentor.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     </div>
 }
+else
+{
+    <div class="alert alert-info mb-0">
+        Chưa có dữ liệu dashboard mentor để hiển thị.
+    </div>
+}
+</div>
 
 @section Scripts {
 <script>
-var labels = [], completionData = [], hoursData = [];
-@if (data?.Interns != null)
-{
-    foreach (var intern in data.Interns)
-    {
-        @:labels.push('@intern.InternName');
-        @:completionData.push(@intern.CompletionRate);
-        @:hoursData.push(@intern.TotalHours);
+const labels = @Html.Raw(JsonSerializer.Serialize(interns.Select(i => i.InternName).ToList()));
+const completionData = @Html.Raw(JsonSerializer.Serialize(interns.Select(i => i.CompletionRate).ToList()));
+const hoursData = @Html.Raw(JsonSerializer.Serialize(interns.Select(i => i.TotalHours).ToList()));
+
+function formatChartLabel(value) {
+    const words = value.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+        const nextLine = currentLine ? `${currentLine} ${word}` : word;
+        if (nextLine.length > 16 && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+        } else {
+            currentLine = nextLine;
+        }
     }
+
+    if (currentLine) {
+        lines.push(currentLine);
+    }
+
+    return lines;
 }
+
 new Chart(document.getElementById('internChart'), {
     type: 'bar',
     data: {
         labels,
         datasets: [
             { label: 'Completion %', data: completionData,
-              backgroundColor: 'rgba(13,110,253,.7)', borderRadius: 6 },
+              backgroundColor: 'rgba(31,124,192,.82)', borderRadius: 10, maxBarThickness: 26 },
             { label: 'Giờ làm', data: hoursData,
-              backgroundColor: 'rgba(25,135,84,.7)', borderRadius: 6 }
+              backgroundColor: 'rgba(142,199,64,.88)', borderRadius: 10, maxBarThickness: 26 }
         ]
     },
     options: {
-        plugins: { legend: { position: 'top' } },
-        scales: { y: { beginAtZero: true } }
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    usePointStyle: true,
+                    pointStyle: 'rectRounded',
+                    boxWidth: 10,
+                    boxHeight: 10,
+                    padding: 18,
+                    font: {
+                        family: 'Be Vietnam Pro',
+                        size: 12,
+                        weight: '600'
+                    },
+                    color: '#17324d'
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(17, 44, 74, .96)',
+                titleFont: { family: 'Be Vietnam Pro', weight: '700' },
+                bodyFont: { family: 'Be Vietnam Pro', weight: '500' },
+                padding: 12,
+                cornerRadius: 12
+            }
+        },
+        scales: {
+            x: {
+                ticks: {
+                    color: '#6f859a',
+                    callback: function(value) {
+                        return formatChartLabel(this.getLabelForValue(value));
+                    },
+                    maxRotation: 0,
+                    minRotation: 0,
+                    font: {
+                        family: 'Be Vietnam Pro',
+                        size: 11,
+                        weight: '600'
+                    }
+                },
+                grid: {
+                    display: false
+                }
+            },
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    color: '#6f859a',
+                    font: {
+                        family: 'Be Vietnam Pro',
+                        size: 11,
+                        weight: '500'
+                    }
+                },
+                grid: {
+                    color: 'rgba(31,124,192,.08)'
+                }
+            }
+        }
     }
 });
 </script>

@@ -22,8 +22,10 @@ public class JobPositionsController : ControllerBase
 
     // =========================================================
     // GET: api/jobpositions
+    // Public endpoint — không cần authorization
     // =========================================================
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<JobPositionVm>>> GetAll()
     {
         var data = await _context.JobPositions

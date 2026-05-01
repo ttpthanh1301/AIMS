@@ -2,82 +2,128 @@
 @model TimesheetResultVm
 @{
     ViewData["Title"] = "Timesheet Intern";
+    var data = Model ?? new TimesheetResultVm();
+    var items = data.Items ?? new List<TimesheetVm>();
     var assignments = ViewBag.Assignments as List<InternAssignmentVm>
         ?? new List<InternAssignmentVm>();
+    var activeInternCount = items.Select(i => i.InternUserId).Distinct().Count();
+    var logDays = items.Select(i => i.WorkDate.Date).Distinct().Count();
+    var latestLogDate = items.Any() ? items.Max(i => i.WorkDate) : (DateTime?)null;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="fw-bold mb-0">
-        <i class="bi bi-clock text-primary me-2"></i>Timesheet Intern
-    </h5>
-    <form method="get" class="d-flex gap-2">
-        <select name="internId" class="form-select form-select-sm" style="width:200px"            onchange="this.form.submit()">
-            <option value="">Tất cả Intern</option>
-            @foreach (var a in assignments)
-            {
-                var selected = ViewBag.InternId?.ToString() == a.InternUserId;
-                if (selected)
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-timesheets.css" />
+}
+
+<div class="timesheet-page">
+    <section class="timesheet-hero">
+        <span class="timesheet-kicker">
+            <i class="bi bi-clock-history"></i> Mentor Workspace
+        </span>
+        <h1 class="timesheet-title">Timesheet của Intern</h1>
+        <p class="timesheet-subtitle">
+            Theo dõi giờ làm theo intern, rà soát task đang được ghi nhận thời gian và lọc nhanh theo từng người
+            trong cùng một màn hình quản lý rõ ràng, dễ quét.
+        </p>
+        <div class="timesheet-stats">
+            <div class="timesheet-stat">
+                <div class="timesheet-stat-label">Tổng giờ đã log</div>
+                <div class="timesheet-stat-value">@data.TotalHours h</div>
+            </div>
+            <div class="timesheet-stat">
+                <div class="timesheet-stat-label">Intern có log</div>
+                <div class="timesheet-stat-value">@activeInternCount</div>
+            </div>
+            <div class="timesheet-stat">
+                <div class="timesheet-stat-label">Số bản ghi</div>
+                <div class="timesheet-stat-value">@items.Count</div>
+            </div>
+            <div class="timesheet-stat">
+                <div class="timesheet-stat-label">Log gần nhất</div>
+                <div class="timesheet-stat-value timesheet-stat-value--compact">
+                    @(latestLogDate?.ToString("dd/MM/yyyy") ?? "--")
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="timesheet-toolbar">
+        <div>
+            <h5 class="fw-bold mb-1">
+                <i class="bi bi-clock text-primary me-2"></i>Danh sách timesheet
+            </h5>
+            <div class="text-muted small">
+                Có @assignments.Count intern được phân công, ghi nhận trên @logDays ngày làm việc.
+            </div>
+        </div>
+        <form method="get" class="timesheet-filter">
+            <label class="form-label fw-semibold small text-muted mb-2">Lọc theo Intern</label>
+            <select name="internId" class="form-select" onchange="this.form.submit()">
+                <option value="">Tất cả Intern</option>
+                @foreach (var a in assignments)
                 {
-                    <option value="@a.InternUserId" selected>@a.InternName</option>
+                    var selected = ViewBag.InternId?.ToString() == a.InternUserId;
+                    if (selected)
+                    {
+                        <option value="@a.InternUserId" selected>@a.InternName</option>
+                    }
+                    else
+                    {
+                        <option value="@a.InternUserId">@a.InternName</option>
+                    }
                 }
-                else
-                {
-                    <option value="@a.InternUserId">@a.InternName</option>
-                }
-            }
-        </select>
-    </form>
+            </select>
+        </form>
+    </section>
+
+    @if (!items.Any())
+    {
+        <div class="timesheet-empty">
+            <i class="bi bi-inbox fs-2 d-block mb-3 text-primary"></i>
+            Chưa có dữ liệu timesheet trong phạm vi lọc hiện tại.
+        </div>
+    }
+    else
+    {
+        <div class="card timesheet-table-card">
+            <div class="card-header border-0">
+                <div>
+                    <div class="timesheet-panel-title">Nhật ký giờ làm</div>
+                    <span class="timesheet-panel-subtitle">
+                        Sắp xếp theo ngày mới nhất, hiển thị intern, task và ghi chú công việc.
+                    </span>
+                </div>
+                <span class="badge rounded-pill px-3 py-2">@items.Count bản ghi</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Intern</th>
+                            <th>Ngày</th>
+                            <th>Task</th>
+                            <th>Giờ làm</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ts in items.OrderByDescending(i => i.WorkDate).ThenBy(i => i.InternName))
+                        {
+                            <tr>
+                                <td class="fw-semibold text-primary">@ts.InternName</td>
+                                <td>@ts.WorkDate.ToString("dd/MM/yyyy")</td>
+                                <td class="small fw-semibold">@ts.TaskTitle</td>
+                                <td>
+                                    <span class="timesheet-hours-badge">@ts.HoursWorked h</span>
+                                </td>
+                                <td class="small timesheet-note">
+                                    @(string.IsNullOrWhiteSpace(ts.WorkNote) ? "Không có ghi chú." : ts.WorkNote)
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
-
-@if (Model != null)
-{
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body d-flex align-items-center gap-3">
-            <div class="rounded-3 bg-primary bg-opacity-10 p-3">
-                <i class="bi bi-clock text-primary fs-3"></i>
-            </div>
-            <div>
-                <div class="text-muted small">Tổng giờ đã log</div>
-                <div class="fs-3 fw-bold text-primary">@Model.TotalHours h</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card border-0 shadow-sm">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Intern</th>
-                        <th>Ngày</th>
-                        <th>Task</th>
-                        <th>Giờ làm</th>
-                        <th>Ghi chú</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var ts in Model.Items)
-                    {
-                        <tr>
-                            <td class="fw-semibold text-primary">@ts.InternName</td>
-                            <td>@ts.WorkDate.ToString("dd/MM/yyyy")</td>
-                            <td class="small">@ts.TaskTitle</td>
-                            <td>
-                                <span class="badge bg-primary">@ts.HoursWorked h</span>
-                            </td>
-                            <td class="text-muted small">@ts.WorkNote</td>
-                        </tr>
-                    }
-                    @if (!Model.Items.Any())
-                    {
-                        <tr>
-                            <td colspan="5" class="text-center text-muted py-4">
-                                Chưa có dữ liệu timesheet.
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-}

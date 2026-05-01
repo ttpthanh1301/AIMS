@@ -1,1 +1,8 @@
-{}
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^sqlcmd -S localhost,1433 -U sa -P \"AIMS@2025!\" -d master -Q \"ALTER DATABASE AIMS SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE AIMS;\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

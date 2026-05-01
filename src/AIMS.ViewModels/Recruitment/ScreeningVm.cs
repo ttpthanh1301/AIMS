@@ -10,6 +10,8 @@ public class RankingItemVm
     public decimal MatchingScore { get; set; }  // % 0-100
     public string KeywordsMatched { get; set; } = string.Empty;
     public string KeywordsMissing { get; set; } = string.Empty;
+    public string ProcessingStatus { get; set; } = "Pending";
+    public string? ErrorMessage { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime ApplyDate { get; set; }
     public DateTime ScreenedAt { get; set; }

@@ -18,6 +18,20 @@ public class JobDescriptionVm
     public int TotalApplications { get; set; }
 }
 
+public class JobDescriptionFormVm
+{
+    public int Id { get; set; }
+    public int? JobPositionId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string DetailContent { get; set; } = string.Empty;
+    public string RequiredSkills { get; set; } = string.Empty;
+    public decimal? MinGPA { get; set; }
+    public DateTime? DeadlineDate { get; set; }
+    public string Status { get; set; } = "OPEN";
+    public string? NewJobPositionTitle { get; set; }
+    public string? NewJobPositionDescription { get; set; }
+}
+
 public class CreateJobDescriptionRequest
 {
     [Required]
@@ -39,6 +53,9 @@ public class CreateJobDescriptionRequest
 
 public class UpdateJobDescriptionRequest
 {
+    [Required]
+    public int JobPositionId { get; set; }
+
     [Required, StringLength(300)]
     public string Title { get; set; } = string.Empty;
 

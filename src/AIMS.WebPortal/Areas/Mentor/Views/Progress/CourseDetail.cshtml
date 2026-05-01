@@ -1,0 +1,105 @@
+@model AIMS.ViewModels.LMS.MentorCourseDetailVm
+@{
+    ViewData["Title"] = "Chi tiết khóa học - " + Model?.CourseTitle;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-progress-course-detail.css" />
+}
+
+<div class="container mt-4">
+    <!-- Nút Quay lại và Header -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <a href="/Mentor/Progress/Dashboard" class="btn btn-outline-secondary mb-3">
+                <i class="fas fa-arrow-left"></i> Quay lại Dashboard
+            </a>
+            <h2>@Model?.CourseTitle</h2>
+            @if (!string.IsNullOrEmpty(Model?.Description))
+            {
+                <p class="text-muted">@Model?.Description</p>
+            }
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-info">Cấp độ: @Model?.Level</span>
+                <span class="badge bg-light text-dark border">Lesson: @(Model?.TotalLessons ?? 0)</span>
+                <span class="badge bg-light text-dark border">Quiz: @(Model?.TotalQuizzes ?? 0)</span>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(ViewBag.Message))
+            {
+                <div class="alert alert-danger mt-3 mb-0" role="alert">
+                    <i class="fas fa-exclamation-circle"></i> @ViewBag.Message
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Danh sách Interns và Tiến độ -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="fas fa-users text-primary"></i> Danh sách Thực tập sinh</h5>
+        </div>
+        <div class="card-body">
+            @if (Model?.Interns != null && Model.Interns.Count > 0)
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Học viên</th>
+                                <th>Ngày tham gia</th>
+                                <th>Bài học (Đã học/Tổng)</th>
+                                <th>Quiz (Đạt/Tổng)</th>
+                                <th>Tiến độ (%)</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var intern in Model.Interns)
+                            {
+                                var percentColor = intern.CompletionPercent >= 100 ? "success" :
+                                                 intern.CompletionPercent >= 50 ? "warning" : "primary";
+                                var progressWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(intern.CompletionPercent), 0, 100)}";
+                                
+                                string statusClass = intern.CompletionPercent == 0 ? "bg-secondary" : 
+                                                   (intern.CompletionPercent >= 100 ? "bg-success" : "bg-primary");
+
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center me-2 course-detail-avatar">
+                                                <i class="fas fa-user"></i>
+                                            </div>
+                                            <strong>@intern.InternName</strong>
+                                        </div>
+                                    </td>
+                                    <td>@intern.EnrollDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@intern.CompletedLessons / @intern.TotalLessons</td>
+                                    <td>@intern.CompletedQuizzes / @intern.TotalQuizzes</td>
+                                    <td class="course-detail-progress-cell">
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress flex-grow-1 me-2 course-detail-progress-bar">
+                                                <div class="progress-bar bg-@percentColor @progressWidthClass" role="progressbar"></div>
+                                            </div>
+                                            <span class="small fw-bold">@string.Format("{0:F0}%", intern.CompletionPercent)</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge @statusClass">@intern.Status</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle"></i> Chưa có thực tập sinh nào trong khóa học này.
+                </div>
+            }
+        </div>
+    </div>
+</div>

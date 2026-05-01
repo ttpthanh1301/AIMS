@@ -3,23 +3,99 @@
 @{
     ViewData["Title"] = "Daily Reports";
     var reports = Model ?? new List<DailyReportVm>();
+    var todayReport = ViewBag.TodayReport as DailyReportVm;
+    var todayDate = ViewBag.TodayDate is DateTime dt ? dt : DateTime.Today;
+    var pendingFeedbackCount = reports.Count(r => !r.HasFeedback);
+    var respondedCount = reports.Count(r => r.HasFeedback);
+    var latestReportDate = reports.Any() ? reports.Max(r => r.ReportDate) : (DateTime?)null;
 }
 
-<div class="row g-4">
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold border-0 pt-3">
-                <i class="bi bi-journal-plus text-primary me-2"></i>Nộp báo cáo hôm nay
+@section Styles {
+<link rel="stylesheet" href="~/css/intern-daily-report.css" />
+}
+
+<div class="intern-report-page">
+    <section class="intern-report-hero">
+        <span class="intern-report-kicker">
+            <i class="bi bi-journal-richtext"></i> Daily Worklog
+        </span>
+        <h1 class="intern-report-title">Daily Report cá nhân</h1>
+        <p class="intern-report-subtitle">
+            Mỗi ngày chỉ nộp một báo cáo. Sau khi gửi xong, hệ thống sẽ khóa form trong ngày đó và chuyển bạn sang theo dõi phản hồi từ mentor.
+        </p>
+        <div class="intern-report-stats">
+            <div class="intern-report-stat">
+                <div class="intern-report-stat-label">Tổng báo cáo</div>
+                <div class="intern-report-stat-value">@reports.Count</div>
+            </div>
+            <div class="intern-report-stat">
+                <div class="intern-report-stat-label">Chờ phản hồi</div>
+                <div class="intern-report-stat-value">@pendingFeedbackCount</div>
+            </div>
+            <div class="intern-report-stat">
+                <div class="intern-report-stat-label">Đã có phản hồi</div>
+                <div class="intern-report-stat-value">@respondedCount</div>
+            </div>
+            <div class="intern-report-stat">
+                <div class="intern-report-stat-label">Báo cáo gần nhất</div>
+                <div class="intern-report-stat-value intern-report-stat-value--compact">
+                    @(latestReportDate?.ToString("dd/MM/yyyy") ?? "--")
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="intern-report-grid">
+        <div class="card intern-report-panel">
+            <div class="card-header border-0">
+                <div class="intern-report-panel-title">
+                    <i class="bi bi-journal-plus text-primary me-2"></i>Nộp báo cáo hôm nay
+                </div>
+                <span class="intern-report-panel-subtitle">
+                    Hôm nay: @todayDate.ToString("dd/MM/yyyy")
+                </span>
             </div>
             <div class="card-body">
                 @if (TempData["Success"] != null)
                 {
                     <div class="alert alert-success py-2">@TempData["Success"]</div>
                 }
-                <form asp-action="Create" method="post">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Hôm nay đã làm gì? <span
-                            class="text-danger">*</span></label>
+                @if (TempData["Error"] != null)
+                {
+                    <div class="alert alert-danger py-2">@TempData["Error"]</div>
+                }
+
+                @if (todayReport != null)
+                {
+                    <div class="intern-report-lock">
+                        <strong><i class="bi bi-check-circle-fill me-1"></i>Bạn đã nộp báo cáo hôm nay.</strong>
+                        <div class="mt-2 small">
+                            Không cần nộp lại trong cùng ngày. Hãy cập nhật vào báo cáo ngày mai hoặc chờ phản hồi từ mentor.
+                        </div>
+                    </div>
+
+                    <div class="intern-report-today">
+                        <div class="fw-semibold text-primary mb-2">Nội dung đã gửi hôm nay</div>
+                        <div class="small text-dark mb-2">@todayReport.Content</div>
+                        @if (!string.IsNullOrWhiteSpace(todayReport.PlannedTomorrow))
+                        {
+                            <div class="small text-muted mb-2">
+                                <strong>Kế hoạch ngày mai:</strong> @todayReport.PlannedTomorrow
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(todayReport.Issues))
+                        {
+                            <div class="small text-muted">
+                                <strong>Vấn đề gặp phải:</strong> @todayReport.Issues
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <form asp-action="Create" method="post">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Hôm nay đã làm gì? <span class="text-danger">*</span></label>
                             <textarea name="content" class="form-control" rows="4" required
                                       placeholder="Mô tả công việc đã thực hiện..."></textarea>
                         </div>
@@ -37,33 +113,59 @@
                             <i class="bi bi-send me-1"></i>Nộp báo cáo
                         </button>
                     </form>
-                </div>
+                }
             </div>
         </div>
 
-        <div class="col-lg-7">
-            <h6 class="fw-bold mb-3">Lịch sử báo cáo</h6>
-            @foreach (var r in reports)
-            {
-                <div class="card border-0 shadow-sm mb-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="fw-semibold">
-                                📅 @r.ReportDate.ToString("dd/MM/yyyy")
-                            </span>
-                            <span class="badge @(r.HasFeedback ? "bg-success" : "bg-secondary") rounded-pill">
-                                @(r.HasFeedback ? "Có phản hồi" : "Chờ phản hồi")
-                            </span>
-                        </div>
-                        <p class="mb-2 text-dark">@r.Content</p>
-                        @if (r.MentorFeedback != null)
+        <div class="card intern-report-panel">
+            <div class="card-header border-0">
+                <div class="intern-report-panel-title">
+                    <i class="bi bi-clock-history text-primary me-2"></i>Lịch sử báo cáo
+                </div>
+                <span class="intern-report-panel-subtitle">
+                    Theo dõi phản hồi và trạng thái từng báo cáo đã nộp.
+                </span>
+            </div>
+            <div class="card-body pt-3">
+                @if (!reports.Any())
+                {
+                    <div class="intern-report-empty">
+                        <i class="bi bi-inbox fs-2 d-block mb-3 text-primary"></i>
+                        Bạn chưa có báo cáo nào.
+                    </div>
+                }
+                else
+                {
+                    <div class="intern-report-history">
+                        @foreach (var r in reports.OrderByDescending(r => r.ReportDate))
                         {
-                            <div class="alert alert-success py-2 mb-0">
-                                <strong>💬 Mentor:</strong> @r.MentorFeedback
+                            <div class="card intern-report-item border-0 shadow-sm">
+                                <div class="card-body">
+                                    <div class="intern-report-row">
+                                        <span class="intern-report-date">
+                                            <i class="bi bi-calendar2"></i>@r.ReportDate.ToString("dd/MM/yyyy")
+                                        </span>
+                                        <span class="intern-report-status @(r.HasFeedback ? "done" : "pending")">
+                                            <i class="bi @(r.HasFeedback ? "bi-chat-dots-fill" : "bi-hourglass-split")"></i>
+                                            @(r.HasFeedback ? "Có phản hồi" : "Chờ phản hồi")
+                                        </span>
+                                    </div>
+                                    <p class="mb-2 text-dark">@r.Content</p>
+                                    @if (r.MentorFeedback != null)
+                                    {
+                                        <div class="intern-report-feedback">
+                                            <div class="intern-report-feedback-label">
+                                                <i class="bi bi-stars"></i>Phản hồi từ mentor
+                                            </div>
+                                            <div>@r.MentorFeedback</div>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
-                </div>
-            }
+                }
+            </div>
         </div>
     </div>
+</div>

@@ -1,0 +1,184 @@
+@model AdminUserIndexVm
+@{
+    string GetPrimaryRole(UserVm user) => user.Roles.FirstOrDefault() ?? "-";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Quản lý người dùng</h3>
+    </div>
+    <a class="btn btn-primary" asp-action="Create">
+        <i class="bi bi-person-plus me-2"></i>Tạo người dùng
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-lg-4">
+                <label class="form-label fw-semibold">Từ khóa</label>
+                <input class="form-control" name="Keyword" value="@Model.Filter.Keyword"
+                       placeholder="Tên, email hoặc username" />
+            </div>
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label fw-semibold">Role</label>
+                <select class="form-select" name="Role">
+                    <option value="">Tất cả</option>
+                    @foreach (var role in Model.AvailableRoles)
+                    {
+                        <option value="@role" selected="@(Model.Filter.Role == role)">@role</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label fw-semibold">Trạng thái</label>
+                <select class="form-select" name="IsActive">
+                    <option value="">Tất cả</option>
+                    <option value="true" selected="@(Model.Filter.IsActive == true)">Đang hoạt động</option>
+                    <option value="false" selected="@(Model.Filter.IsActive == false)">Đã khóa</option>
+                </select>
+            </div>
+            <div class="col-md-2 col-lg-2">
+                <label class="form-label fw-semibold">Số dòng</label>
+                <select class="form-select" name="PageSize">
+                    @foreach (var size in new[] { 10, 20, 50 })
+                    {
+                        <option value="@size" selected="@(Model.Filter.PageSize == size)">@size</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-2 d-flex align-items-end">
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="bi bi-funnel me-2"></i>Lọc
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Người dùng</th>
+                        <th>Role</th>
+                        <th>Thông tin theo role</th>
+                        <th>Ngày tạo</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.Result.Items.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-5">Không có người dùng phù hợp.</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var user in Model.Result.Items)
+                    {
+                        var primaryRole = GetPrimaryRole(user);
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">@user.FullName</div>
+                                <div class="small text-muted">@user.Email</div>
+                                <div class="small text-muted">
+                                    @(string.IsNullOrWhiteSpace(user.PhoneNumber) ? "Chưa có số điện thoại" : user.PhoneNumber)
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill">@primaryRole</span>
+                            </td>
+                            <td>
+                                @if (primaryRole == "Intern")
+                                {
+                                    <div class="small mb-1"><strong>MSSV:</strong> @(string.IsNullOrWhiteSpace(user.StudentId) ? "-" : user.StudentId)</div>
+                                    <div class="small text-muted"><strong>GPA:</strong> @(user.GPA?.ToString("0.0") ?? "-")</div>
+                                }
+                                else if (primaryRole == "Mentor")
+                                {
+                                    <div class="small mb-1">Theo dõi đào tạo, task và tiến độ intern.</div>
+                                    <div class="small text-muted">Thông tin chính: email và số điện thoại.</div>
+                                }
+                                else if (primaryRole == "HR")
+                                {
+                                    <div class="small mb-1">Phụ trách tuyển dụng, JD và screening.</div>
+                                    <div class="small text-muted">Thông tin chính: email và số điện thoại.</div>
+                                }
+                                else if (primaryRole == "Admin")
+                                {
+                                    <div class="small mb-1">Quản trị người dùng, role và hệ thống.</div>
+                                    <div class="small text-muted">Thông tin chính: email và số điện thoại.</div>
+                                }
+                                else
+                                {
+                                    <div class="small text-muted">Không có dữ liệu role để hiển thị.</div>
+                                }
+                            </td>
+                            <td>@user.CreateDate.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <span class="badge @(user.IsActive ? "bg-success" : "bg-secondary") rounded-pill">
+                                    @(user.IsActive ? "Hoạt động" : "Đã khóa")
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-2">
+                                    <a class="btn btn-sm btn-outline-primary"
+                                       asp-action="Edit" asp-route-id="@user.Id">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                    @if (user.IsActive)
+                                    {
+                                        <form asp-action="Deactivate" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@user.Id" />
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    type="submit"
+                                                    onclick="return confirm('Vô hiệu hóa tài khoản này?')">
+                                                <i class="bi bi-person-x"></i>
+                                            </button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if (Model.Result.TotalPages > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination">
+            @for (var i = 1; i <= Model.Result.TotalPages; i++)
+            {
+                <li class="page-item @(Model.Result.PageIndex == i ? "active" : "")">
+                    <a class="page-link"
+                       asp-action="Index"
+                       asp-route-Keyword="@Model.Filter.Keyword"
+                       asp-route-Role="@Model.Filter.Role"
+                       asp-route-IsActive="@Model.Filter.IsActive"
+                       asp-route-PageSize="@Model.Filter.PageSize"
+                       asp-route-PageIndex="@i">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}

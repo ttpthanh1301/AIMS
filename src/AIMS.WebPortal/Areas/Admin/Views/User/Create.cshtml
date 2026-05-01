@@ -1,0 +1,163 @@
+@model CreateUserRequest
+
+@section Styles {
+<link rel="stylesheet" href="~/css/admin-user-create.css" />
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Tạo người dùng</h3>
+        <div class="text-muted">Form sẽ thay đổi theo role để chỉ hiển thị đúng thông tin cần nhập.</div>
+    </div>
+    <a class="btn btn-outline-primary" asp-action="Index">
+        <i class="bi bi-arrow-left me-2"></i>Quay lại
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="col-md-6">
+                <label asp-for="FirstName" class="form-label fw-semibold">Tên</label>
+                <input asp-for="FirstName" class="form-control" />
+                <span asp-validation-for="FirstName" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="LastName" class="form-label fw-semibold">Họ</label>
+                <input asp-for="LastName" class="form-control" />
+                <span asp-validation-for="LastName" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Email" class="form-label fw-semibold">Email</label>
+                <input asp-for="Email" class="form-control" />
+                <span asp-validation-for="Email" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="PhoneNumber" class="form-label fw-semibold">Số điện thoại</label>
+                <input asp-for="PhoneNumber" class="form-control" />
+                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label asp-for="Role" class="form-label fw-semibold">Vai trò</label>
+                <select asp-for="Role" class="form-select" id="role-select">
+                    <option value="Admin">Admin</option>
+                    <option value="HR">HR</option>
+                    <option value="Mentor">Mentor</option>
+                    <option value="Intern">Intern</option>
+                </select>
+            </div>
+            <div class="col-12">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="Admin">
+                            <div class="fw-semibold mb-1">Admin</div>
+                            <div class="small text-muted">Quản trị hệ thống, user, role và vận hành tổng thể.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="HR">
+                            <div class="fw-semibold mb-1">HR</div>
+                            <div class="small text-muted">Quản lý JD, CV và AI screening cho tuyển dụng.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="Mentor">
+                            <div class="fw-semibold mb-1">Mentor</div>
+                            <div class="small text-muted">Quản lý task, timesheet, daily report và đào tạo.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="role-panel" data-role-card="Intern">
+                            <div class="fw-semibold mb-1">Intern</div>
+                            <div class="small text-muted">Cần thêm mã sinh viên và GPA để theo dõi hồ sơ thực tập.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 role-specific" data-role-section="Intern">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="StudentId" class="form-label fw-semibold">Mã sinh viên</label>
+                        <input asp-for="StudentId" class="form-control" />
+                        <span asp-validation-for="StudentId" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="GPA" class="form-label fw-semibold">GPA</label>
+                        <input asp-for="GPA" class="form-control" type="number" step="0.1" min="0" max="4" />
+                        <span asp-validation-for="GPA" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <label asp-for="Password" class="form-label fw-semibold">Mật khẩu</label>
+                <div class="input-group password-input-group">
+                    <input asp-for="Password"
+                           class="form-control"
+                           type="password"
+                           id="create-user-password"
+                           autocomplete="new-password" />
+                    <button type="button"
+                            class="password-toggle"
+                            id="toggle-create-user-password"
+                            aria-label="Hiển thị mật khẩu">
+                        <i class="bi bi-eye-fill" id="toggle-create-user-password-icon"></i>
+                    </button>
+                </div>
+                <span asp-validation-for="Password" class="text-danger small"></span>
+            </div>
+            <div class="col-12 d-flex justify-content-end gap-2 mt-3">
+                <a class="btn btn-outline-primary" asp-action="Index">Hủy</a>
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-person-plus me-2"></i>Tạo tài khoản
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        const roleSelect = document.getElementById('role-select');
+        const roleSections = document.querySelectorAll('[data-role-section]');
+        const roleCards = document.querySelectorAll('[data-role-card]');
+        const studentIdInput = document.getElementById('StudentId');
+        const gpaInput = document.getElementById('GPA');
+        const passwordInput = document.getElementById('create-user-password');
+        const passwordToggle = document.getElementById('toggle-create-user-password');
+        const passwordToggleIcon = document.getElementById('toggle-create-user-password-icon');
+
+        function syncRoleForm() {
+            const role = roleSelect?.value || 'Intern';
+
+            roleSections.forEach(section => {
+                section.classList.toggle('show', section.dataset.roleSection === role);
+            });
+
+            roleCards.forEach(card => {
+                card.classList.toggle('active', card.dataset.roleCard === role);
+            });
+
+            if (role !== 'Intern') {
+                if (studentIdInput) studentIdInput.value = '';
+                if (gpaInput) gpaInput.value = '';
+            }
+        }
+
+        roleSelect?.addEventListener('change', syncRoleForm);
+
+        passwordToggle?.addEventListener('click', () => {
+            const isPassword = passwordInput?.type === 'password';
+            if (!passwordInput || !passwordToggleIcon) return;
+
+            passwordInput.type = isPassword ? 'text' : 'password';
+            passwordToggle.setAttribute('aria-label', isPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu');
+            passwordToggleIcon.classList.toggle('bi-eye-fill', !isPassword);
+            passwordToggleIcon.classList.toggle('bi-eye-slash-fill', isPassword);
+        });
+
+        syncRoleForm();
+    </script>
+}

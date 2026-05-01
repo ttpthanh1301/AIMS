@@ -1,0 +1,111 @@
+@model AIMS.ViewModels.LMS.EnrollmentLessonDetailVm
+@{
+    ViewData["Title"] = "Tiến độ học tập - " + Model?.InternName;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/mentor-progress-lesson-progress.css" />
+}
+
+<div class="container mt-4">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <a href="/Mentor/Progress/CourseDetail/@Model?.CourseId" class="btn btn-outline-secondary mb-3">
+                <i class="fas fa-arrow-left"></i> Quay lại chi tiết khóa học
+            </a>
+            <h2>Tiến độ học tập của <span class="text-primary">@Model?.InternName</span></h2>
+            <p class="text-muted">Khóa học: <strong>@Model?.CourseTitle</strong></p>
+            
+            @{
+                var completionPercent = Math.Round(Model?.CompletionPercent ?? 0, 0, MidpointRounding.AwayFromZero);
+                var progressColor = completionPercent >= 100 ? "bg-success" : (completionPercent == 0 ? "bg-secondary" : "bg-primary");
+                var statusClass = completionPercent >= 100 ? "bg-success" : (completionPercent == 0 ? "bg-secondary" : "bg-primary");
+                var completionWidthClass = $"w-pct-{Math.Clamp((int)completionPercent, 0, 100)}";
+            }
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <span class="badge bg-light text-dark border">Lesson: @(Model?.CompletedLessons ?? 0)/@(Model?.TotalLessons ?? 0)</span>
+                <span class="badge bg-light text-dark border">Quiz: @(Model?.CompletedQuizzes ?? 0)/@(Model?.TotalQuizzes ?? 0)</span>
+                <span class="badge @statusClass">@(Model?.Status ?? "Chưa bắt đầu")</span>
+            </div>
+
+            <div class="d-flex align-items-center mb-4 lesson-progress-summary">
+                <span class="me-2 fw-bold">Tiến độ chung:</span>
+                <div class="progress flex-grow-1 lesson-progress-bar">
+                    <div class="progress-bar @progressColor @completionWidthClass" role="progressbar"></div>
+                </div>
+                <span class="ms-2 fw-bold">@string.Format("{0:F0}%", completionPercent)</span>
+            </div>
+        </div>
+    </div>
+
+    @if (Model?.Chapters != null && Model.Chapters.Count > 0)
+    {
+        foreach (var chapter in Model.Chapters)
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-book-open text-primary"></i> @chapter.ChapterTitle</h5>
+                    <span class="badge bg-light text-dark border">@chapter.Items.Count mục</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nội dung</th>
+                                    <th>Loại</th>
+                                    <th>Trạng thái</th>
+                                    <th>Điểm</th>
+                                    <th>Hoàn thành lúc</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in chapter.Items)
+                                {
+                                    <tr>
+                                        <td>@item.ItemTitle</td>
+                                        <td>
+                                            <span class="badge @(item.ItemType == "Quiz" ? "bg-warning text-dark" : "bg-secondary")">
+                                                @item.DisplayType
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (item.IsCompleted)
+                                            {
+                                                <span class="badge bg-success"><i class="fas fa-check-circle"></i> Hoàn thành</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-dark border"><i class="fas fa-times-circle"></i> Chưa hoàn thành</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (item.ItemType == "Quiz")
+                                            {
+                                                if (item.Score.HasValue)
+                                                {
+                                                    <span>@item.Score / @(item.PassScore?.ToString("0.#") ?? "-")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">- / @(item.PassScore?.ToString("0.#") ?? "-")</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>@(item.CompletedAt?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>

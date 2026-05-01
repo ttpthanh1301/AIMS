@@ -22,5 +22,9 @@ public class UserQuizAnswerConfiguration : IEntityTypeConfiguration<UserQuizAnsw
             .WithMany()
             .HasForeignKey(x => x.SelectedOptionId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Decimal precision for mentor-assigned scores to avoid store truncation warnings
+        builder.Property(x => x.MentorScore)
+            .HasPrecision(18, 2);
     }
 }

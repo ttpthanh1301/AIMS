@@ -1,0 +1,85 @@
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "AI Screening";
+    var jds = Model as IEnumerable<JsonElement> ?? Enumerable.Empty<JsonElement>();
+
+    string GetString(JsonElement item, string name)
+    {
+        return item.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null
+            ? value.ToString()
+            : "";
+    }
+
+    int GetInt(JsonElement item, string name)
+    {
+        return item.TryGetProperty(name, out var value) && value.TryGetInt32(out var result)
+            ? result
+            : 0;
+    }
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/hr-screening-index.css" />
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h5 class="fw-bold mb-1">
+            <i class="bi bi-robot text-primary me-2"></i>AI Screening
+        </h5>
+        <div class="text-muted small">Upload CV PDF, chạy parse và chấm điểm theo từng JD.</div>
+    </div>
+    <a asp-area="HR" asp-controller="JobDescription" asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Tạo JD mới
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>JD</th>
+                    <th>Vị trí</th>
+                    <th>Required Skills</th>
+                    <th>GPA</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var jd in jds)
+                {
+                    var id = GetInt(jd, "id");
+                    var title = GetString(jd, "title");
+                    var position = GetString(jd, "jobPositionTitle");
+                    var skills = GetString(jd, "requiredSkills");
+                    var minGpa = GetString(jd, "minGPA");
+
+                    <tr>
+                        <td class="fw-semibold">@title</td>
+                        <td>@position</td>
+                        <td class="screening-skills">@skills</td>
+                        <td>@(string.IsNullOrWhiteSpace(minGpa) ? "-" : minGpa)</td>
+                        <td class="text-end">
+                            <a asp-action="Ranking"
+                               asp-route-jdId="@id"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-trophy me-1"></i>Ranking
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

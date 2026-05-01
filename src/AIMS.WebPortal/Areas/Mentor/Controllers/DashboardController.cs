@@ -32,11 +32,14 @@ public class DashboardController : Controller
     public async Task<IActionResult> DailyReports(string? internId = null)
     {
         ViewData["Title"] = "Daily Reports";
+        var assignments = await _api.GetAsync<List<InternAssignmentVm>>(
+            "/api/internassignments") ?? new List<InternAssignmentVm>();
         var url = string.IsNullOrEmpty(internId)
             ? "/api/dailyreports"
             : $"/api/dailyreports?internId={internId}";
         var reports = await _api.GetAsync<List<DailyReportVm>>(url)
             ?? new List<DailyReportVm>();
+        ViewBag.Assignments = assignments;
         ViewBag.InternId = internId;
         return View(reports);
     }
@@ -55,55 +58,16 @@ public class DashboardController : Controller
     public async Task<IActionResult> Timesheets(string? internId = null)
     {
         ViewData["Title"] = "Timesheet";
+        var assignments = await _api.GetAsync<List<InternAssignmentVm>>(
+            "/api/internassignments") ?? new List<InternAssignmentVm>();
+        var url = string.IsNullOrEmpty(internId)
+            ? "/api/timesheets"
+            : $"/api/timesheets?internId={internId}";
+        var data = await _api.GetAsync<TimesheetResultVm>(url)
+            ?? new TimesheetResultVm();
 
-        // ⭐ Thử cả 2 cách lấy data
-        TimesheetResultVm? data = null;
-
-        if (!string.IsNullOrEmpty(internId))
-        {
-            data = await _api.GetAsync<TimesheetResultVm>(
-                $"/api/timesheets?internId={internId}");
-        }
-        else
-        {
-            // Lấy tất cả intern của mentor
-            var assignments = await _api.GetAsync<List<InternAssignmentVm>>(
-                "/api/internassignments") ?? new List<InternAssignmentVm>();
-
-            var allItems = new List<TimesheetVm>();
-            decimal total = 0;
-
-            // Lấy timesheet từng intern
-            foreach (var a in assignments)
-            {
-                var internData = await _api.GetAsync<TimesheetResultVm>(
-                    $"/api/timesheets?internId={a.InternUserId}");
-
-                if (internData?.Items != null)
-                {
-                    allItems.AddRange(internData.Items);
-                    total += internData.TotalHours;
-                }
-            }
-
-            data = new TimesheetResultVm
-            {
-                TotalHours = total,
-                Items = allItems.OrderByDescending(i => i.WorkDate).ToList(),
-            };
-
-            ViewBag.Assignments = assignments;
-        }
-
-        // Nếu filter theo intern cụ thể
-        if (!string.IsNullOrEmpty(internId))
-        {
-            var assignments2 = await _api.GetAsync<List<InternAssignmentVm>>(
-                "/api/internassignments") ?? new List<InternAssignmentVm>();
-            ViewBag.Assignments = assignments2;
-        }
-
+        ViewBag.Assignments = assignments;
         ViewBag.InternId = internId;
-        return View(data ?? new TimesheetResultVm());
+        return View(data);
     }
 }

@@ -4,6 +4,10 @@
     var jds  = ViewBag.JDs as List<dynamic> ?? new();
 }
 
+@section Styles {
+<link rel="stylesheet" href="~/css/intern-apply.css" />
+}
+
 <div class="row g-4">
     <!-- Form nộp hồ sơ -->
     <div class="col-md-5">
@@ -35,9 +39,9 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">File CV (PDF)</label>
                         <input type="file" name="cvFile"
-                               accept=".pdf,.doc,.docx"
+                               accept=".pdf,application/pdf"
                                class="form-control" required />
-                        <small class="text-muted">Hỗ trợ PDF, Word</small>
+                        <small class="text-muted">Chỉ hỗ trợ PDF có thể copy text</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Cover Letter</label>
@@ -68,6 +72,9 @@
 
                     @if (app.aiScreeningResult != null)
                     {
+                        var matchingScore = Convert.ToDouble(app.aiScreeningResult.matchingScore);
+                        var scoreWidthClass = $"w-pct-{Math.Clamp((int)Math.Round(matchingScore), 0, 100)}";
+
                         <div class="mt-2 p-3 bg-light rounded">
                             <div class="d-flex justify-content-between mb-1">
                                 <small class="text-muted">
@@ -77,9 +84,8 @@
                                     @app.aiScreeningResult.matchingScore%
                                 </strong>
                             </div>
-                            <div class="progress" style="height:6px">
-                                <div class="progress-bar @(app.aiScreeningResult.matchingScore >= 70 ? "bg-success" : "bg-warning")"
-                                     style="width:@(app.aiScreeningResult.matchingScore)%">
+                            <div class="progress apply-score-progress">
+                                <div class="progress-bar @(matchingScore >= 70 ? "bg-success" : "bg-warning") @scoreWidthClass">
                                 </div>
                             </div>
                             <small class="text-success mt-1 d-block">

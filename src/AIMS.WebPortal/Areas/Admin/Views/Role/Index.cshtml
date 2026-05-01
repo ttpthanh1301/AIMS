@@ -1,0 +1,84 @@
+@model List<RoleVm>
+@{
+    var systemRoles = new[] { "Admin", "HR", "Mentor", "Intern" };
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Quản lý roles</h3>
+    </div>
+    <a class="btn btn-primary" asp-action="Create">
+        <i class="bi bi-key me-2"></i>Tạo role
+    </a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Id</th>
+                        <th>Tên role</th>
+                        <th>Mô tả</th>
+                        <th>Loại</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.Count == 0)
+                {
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-5">Chưa có role nào.</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var role in Model)
+                    {
+                        var isSystemRole = systemRoles.Contains(role.Name, StringComparer.OrdinalIgnoreCase);
+                        <tr>
+                            <td class="fw-semibold">@role.Id</td>
+                            <td>@role.Name</td>
+                            <td class="text-muted">@(string.IsNullOrWhiteSpace(role.Description) ? "-" : role.Description)</td>
+                            <td>
+                                <span class="badge @(isSystemRole ? "bg-secondary" : "bg-success") rounded-pill">
+                                    @(isSystemRole ? "Hệ thống" : "Tùy biến")
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-2">
+                                    <a class="btn btn-sm btn-outline-primary"
+                                       asp-action="Edit" asp-route-id="@role.Id">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                    @if (!isSystemRole)
+                                    {
+                                        <form asp-action="Delete" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@role.Id" />
+                                            <button class="btn btn-sm btn-outline-danger" type="submit"
+                                                    onclick="return confirm('Xóa role này?')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

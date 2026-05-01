@@ -9,6 +9,11 @@ public class AIScreeningResultConfiguration : IEntityTypeConfiguration<AIScreeni
     public void Configure(EntityTypeBuilder<AIScreeningResult> builder)
     {
         builder.Property(x => x.MatchingScore).HasPrecision(5, 2);
+        builder.Property(x => x.ProcessingStatus)
+            .HasMaxLength(20)
+            .IsRequired();
+        builder.Property(x => x.ErrorMessage)
+            .HasMaxLength(1000);
 
         builder.HasOne(x => x.ReviewedByHR)
             .WithMany()
