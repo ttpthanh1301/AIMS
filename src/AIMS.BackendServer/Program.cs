@@ -7,6 +7,7 @@ using AIMS.BackendServer.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using FluentValidation;
@@ -18,13 +19,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── 1. Database ────────────────────────────────────────────
 builder.Services.AddDbContext<AimsDbContext>(opts =>
-    opts.UseSqlServer(
+    opts.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions =>
+        pgOptions =>
         {
             // KHÔNG dùng EnableRetryOnFailure ở đây vì chúng ta tự retry bên ngoài.
             // EnableRetryOnFailure conflict với MigrateAsync trong vòng lặp retry thủ công.
-            sqlOptions.CommandTimeout(60);
+            pgOptions.CommandTimeout(60);
         }
     )
 );
@@ -32,10 +33,10 @@ builder.Services.AddDbContext<AimsDbContext>(opts =>
 // ── 2. Identity ────────────────────────────────────────────
 builder.Services.AddIdentity<AppUser, AppRole>(opts =>
 {
-    opts.Password.RequireDigit           = true;
-    opts.Password.RequiredLength         = 6;
+    opts.Password.RequireDigit = true;
+    opts.Password.RequiredLength = 6;
     opts.Password.RequireNonAlphanumeric = false;
-    opts.Password.RequireUppercase       = false;
+    opts.Password.RequireUppercase = false;
 })
 .AddEntityFrameworkStores<AimsDbContext>()
 .AddDefaultTokenProviders();
@@ -50,23 +51,23 @@ builder.Services
     .AddAuthentication(opts =>
     {
         opts.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        opts.DefaultChallengeScheme    = JwtBearerDefaults.AuthenticationScheme;
+        opts.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
     })
     .AddJwtBearer(opts =>
     {
         opts.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer           = true,
-            ValidateAudience         = true,
-            ValidateLifetime         = true,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer              = jwtSettings.Issuer,
-            ValidAudience            = jwtSettings.Audience,
-            IssuerSigningKey         = new SymmetricSecurityKey(
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(
                                            Encoding.UTF8.GetBytes(jwtSettings.Key)),
-            ClockSkew                = TimeSpan.Zero,
-            NameClaimType            = System.Security.Claims.ClaimTypes.NameIdentifier,
-            RoleClaimType            = System.Security.Claims.ClaimTypes.Role,
+            ClockSkew = TimeSpan.Zero,
+            NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
         };
     });
 
@@ -94,8 +95,8 @@ builder.Services.AddOpenApi("v1", options =>
     {
         document.Info = new()
         {
-            Title       = "AIMS API",
-            Version     = "v1",
+            Title = "AIMS API",
+            Version = "v1",
             Description = "Hệ thống Quản lý Thực tập sinh Thông minh — DEHA Việt Nam",
         };
 
@@ -103,8 +104,8 @@ builder.Services.AddOpenApi("v1", options =>
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
         document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
         {
-            Type        = SecuritySchemeType.Http,
-            Scheme      = "bearer",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
             BearerFormat = "JWT",
             Description = "Nhập JWT token. VD: eyJhbGci...",
         };
@@ -132,7 +133,7 @@ var app = builder.Build();
 await InitializeDatabaseAsync(app);
 
 // ── Middleware Pipeline ────────────────────────────────────
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(opts =>
@@ -141,7 +142,6 @@ if (app.Environment.IsDevelopment())
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
             .AddPreferredSecuritySchemes("Bearer"));
 }
-
 app.UseCors("AllowWebPortal");
 
 if (!app.Environment.IsDevelopment())
@@ -159,15 +159,15 @@ app.Run();
 // ═══════════════════════════════════════════════════════════
 static async Task InitializeDatabaseAsync(WebApplication app)
 {
-    const int MaxRetries    = 10;
+    const int MaxRetries = 10;
     const int BaseDelaySecs = 5;
 
-    using var scope  = app.Services.CreateScope();
-    var sv           = scope.ServiceProvider;
-    var logger       = sv.GetRequiredService<ILogger<Program>>();
-    var context      = sv.GetRequiredService<AimsDbContext>();
-    var userMgr      = sv.GetRequiredService<UserManager<AppUser>>();
-    var roleMgr      = sv.GetRequiredService<RoleManager<AppRole>>();
+    using var scope = app.Services.CreateScope();
+    var sv = scope.ServiceProvider;
+    var logger = sv.GetRequiredService<ILogger<Program>>();
+    var context = sv.GetRequiredService<AimsDbContext>();
+    var userMgr = sv.GetRequiredService<UserManager<AppUser>>();
+    var roleMgr = sv.GetRequiredService<RoleManager<AppRole>>();
 
     // ── Bước 1: Chờ SQL Server sẵn sàng + chạy Migration ──
     for (int attempt = 1; attempt <= MaxRetries; attempt++)
@@ -249,33 +249,14 @@ static async Task InitializeDatabaseAsync(WebApplication app)
 // ── Helper: Phân loại lỗi transient ───────────────────────
 static bool IsTransientError(Exception ex)
 {
-    // SqlException với mã lỗi thường gặp khi SQL Server chưa sẵn sàng
-    var sqlEx = FindSqlException(ex);
-    if (sqlEx is null) return false;
-
-    // 53   = Cannot connect (server not started)
-    // -2   = Timeout
-    // 4060 = Cannot open database
-    // 40613 = Database unavailable (Azure)
-    int[] transientCodes = [53, -2, 4060, 40613, 233, 64, 20];
-    return transientCodes.Contains(sqlEx.Number);
+    // PostgreSQL connection errors handling
+    return ex is TimeoutException ||
+           ex is InvalidOperationException && ex.Message.Contains("already open", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsPendingModelChanges(Exception ex) =>
-    ex.Message?.Contains("pending changes",         StringComparison.OrdinalIgnoreCase) == true ||
+    ex.Message?.Contains("pending changes", StringComparison.OrdinalIgnoreCase) == true ||
     ex.Message?.Contains("PendingModelChangesWarning", StringComparison.OrdinalIgnoreCase) == true;
-
-static Microsoft.Data.SqlClient.SqlException? FindSqlException(Exception ex)
-{
-    var current = ex;
-    while (current is not null)
-    {
-        if (current is Microsoft.Data.SqlClient.SqlException sqlEx)
-            return sqlEx;
-        current = current.InnerException;
-    }
-    return null;
-}
 
 // ── Helper: Kiểm tra bảng tồn tại trong DB ────────────────
 static async Task<bool> TableExistsAsync(AimsDbContext context, string tableName)
@@ -283,8 +264,12 @@ static async Task<bool> TableExistsAsync(AimsDbContext context, string tableName
     var conn = context.Database.GetDbConnection();
     await conn.OpenAsync();
     await using var cmd = conn.CreateCommand();
-    cmd.CommandText = $"SELECT COUNT(1) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{tableName}'";
+    cmd.CommandText = $@"SELECT EXISTS(
+        SELECT 1 FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = '{tableName}'
+    )";
     var result = await cmd.ExecuteScalarAsync();
     await conn.CloseAsync();
-    return Convert.ToInt32(result) > 0;
+    return result is true;
 }

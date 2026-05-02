@@ -5,13 +5,28 @@ using Microsoft.EntityFrameworkCore;
 namespace AIMS.BackendServer.Data.SeedData;
 
 /// <summary>
-/// Khởi tạo dữ liệu mẫu cho hệ thống AIMS.
+/// Khởi tạo dữ liệu mẫu cho hệ thống AIMS — PostgreSQL edition.
 ///
 /// Chiến lược 2 bước:
-///   1. C# (Identity)  → Tạo 4 role + 4 user thực với password hash đúng.
-///                        Id phải khớp với SQL bên dưới để MERGE không tạo bản ghi trùng.
-///   2. SQL (MERGE)     → Upsert toàn bộ dữ liệu bulk (30 intern, courses, tasks...).
+///   1. C# (Identity)  → Tạo roles + users thực với password hash đúng.
+///   2. SQL (PL/pgSQL) → UPSERT toàn bộ dữ liệu bulk qua DO $$ ... $$ block.
 ///                        Chạy lại nhiều lần không bị lỗi duplicate.
+///
+/// Khác biệt so với SQL Server:
+///   - MERGE           → INSERT ... ON CONFLICT ... DO UPDATE / DO NOTHING
+///   - SET IDENTITY_INSERT ON/OFF → không cần, PostgreSQL cho phép insert explicit Id
+///   - Sau mỗi explicit-Id insert → PERFORM setval() để reset sequence
+///   - GETDATE()       → NOW()
+///   - DATEADD()       → interval arithmetic
+///   - NEWID()         → gen_random_uuid()::TEXT
+///   - N'string'       → 'string'  (không cần prefix N)
+///   - @var            → v_var trong PL/pgSQL
+///   - RAISERROR       → RAISE EXCEPTION
+///   - PRINT           → RAISE NOTICE
+///   - + (concat)      → ||
+///   - CAST(x AS NVARCHAR) → x::TEXT
+///   - CONVERT(date,x) → x::DATE
+///   - 1/0 (boolean)   → TRUE/FALSE
 /// </summary>
 public static class DbInitializer
 {
@@ -25,17 +40,38 @@ public static class DbInitializer
         RoleManager<AppRole> roleManager)
     {
         await SeedRolesAsync(roleManager);
-        await SeedUsersAsync(userManager);
+        await context.Database.ExecuteSqlRawAsync(SeedUniversitiesSql); // ← seed Universities trước
+        await SeedUsersAsync(userManager);                               // ← FK thỏa mãn
         await context.Database.ExecuteSqlRawAsync(FullScaleSeedSql);
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Bước 1a — Seed 4 roles cơ bản qua Identity
-    //
-    // ⚠️ Id ở đây PHẢI khớp với giá trị Id trong SQL MERGE bên dưới
-    //    để tránh tạo bản ghi trùng NormalizedName.
+    // Bước 1a — Seed roles qua Identity
     // ═══════════════════════════════════════════════════════════
+    private const string SeedUniversitiesSql = """
+    INSERT INTO "Universities" ("Id", "Name", "City") VALUES
+        (1,  'Đại học Bách khoa Hà Nội',      'Hà Nội'),
+        (2,  'Đại học Công nghệ - ĐHQGHN',    'Hà Nội'),
+        (3,  'Học viện Công nghệ BCVT',        'Hà Nội'),
+        (4,  'Đại học FPT',                    'Hà Nội'),
+        (5,  'Đại học KHTN - ĐHQG TP.HCM',    'TP.HCM'),
+        (6,  'Đại học Duy Tân',                'Đà Nẵng'),
+        (7,  'Đại học Thương Mại (TMU)',       'Hà Nội'),
+        (8,  'Đại học Kinh tế Quốc dân',      'Hà Nội'),
+        (9,  'Đại học Giao thông Vận tải',    'Hà Nội'),
+        (10, 'Học viện Ngân hàng',             'Hà Nội'),
+        (11, 'Học viện Kỹ thuật Mật mã',      'Hà Nội'),
+        (12, 'Đại học Công nghiệp Hà Nội',    'Hà Nội'),
+        (13, 'Đại học Sư phạm Kỹ thuật',      'TP.HCM'),
+        (14, 'Đại học Bách khoa TP.HCM',      'TP.HCM'),
+        (15, 'Đại học Tôn Đức Thắng',         'TP.HCM')
+    ON CONFLICT ("Id") DO NOTHING;
 
+    SELECT setval(
+        pg_get_serial_sequence('"Universities"', 'Id'),
+        (SELECT MAX("Id") FROM "Universities")
+    );
+    """;
     private static async Task SeedRolesAsync(RoleManager<AppRole> roleManager)
     {
         var roles = new[]
@@ -59,22 +95,11 @@ public static class DbInitializer
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Bước 1b — Seed 4 users thực với password hash đúng
-    //
-    // ⚠️ Id + Email + UserName ở đây PHẢI khớp với SQL bên dưới.
-    //    SQL MERGE dùng ON T.[Id] = S.[Id] → nếu Id đã tồn tại
-    //    (do C# tạo), MERGE sẽ bỏ qua (WHEN NOT MATCHED BY TARGET).
-    //
-    //    Mapping với SQL:
-    //      "U_ADMIN_001"  ↔ admin@deha.vn   (SQL row U_ADMIN_001)
-    //      "U_HR_001"     ↔ hr.minh@deha.vn (SQL row U_HR_001)
-    //      "U_MENTOR_001" ↔ hoang@deha.vn   (SQL row U_MENTOR_001)
-    //      "U_INTERN_001" ↔ thanh@sv.vn     (SQL row U_INTERN_001)
+    // Bước 1b — Seed users thực với password hash qua Identity
     // ═══════════════════════════════════════════════════════════
 
     private static async Task SeedUsersAsync(UserManager<AppUser> userManager)
     {
-        // Mật khẩu dùng chung theo từng role
         const string AdminPassword = "Admin@2025!";
         const string HrPassword = "Hr@2025!";
         const string MentorPassword = "Mentor@2025!";
@@ -82,43 +107,43 @@ public static class DbInitializer
 
         var users = new[]
         {
-            (Id: "U_ADMIN_001", Email: "admin@deha.vn", UserName: "admin", Pass: AdminPassword, Role: "Admin", First: "Admin", Last: "System", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_HR_001", Email: "hr.minh@deha.vn", UserName: "hr.minh", Pass: HrPassword, Role: "HR", First: "Minh", Last: "Nguyễn HR", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_HR_002", Email: "hr.lan@deha.vn", UserName: "hr.lan", Pass: HrPassword, Role: "HR", First: "Lan", Last: "Phạm HR", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_MENTOR_001", Email: "hoang@deha.vn", UserName: "mentor.hoang", Pass: MentorPassword, Role: "Mentor", First: "Hoàng", Last: "Backend", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_MENTOR_002", Email: "anh@deha.vn", UserName: "mentor.anh", Pass: MentorPassword, Role: "Mentor", First: "Anh", Last: "AI_NLP", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_MENTOR_003", Email: "duc@deha.vn", UserName: "mentor.duc", Pass: MentorPassword, Role: "Mentor", First: "Đức", Last: "QA_QC", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_MENTOR_004", Email: "huong@deha.vn", UserName: "mentor.huong", Pass: MentorPassword, Role: "Mentor", First: "Hương", Last: "BA_Lead", StudentId: (string?)null, GPA: (decimal?)null),
-            (Id: "U_INTERN_001", Email: "thanh@sv.vn", UserName: "intern.thanh", Pass: InternPassword, Role: "Intern", First: "Thanh", Last: "Trần Phương", StudentId: (string?)"SV001", GPA: (decimal?)3.85m),
-            (Id: "U_INTERN_002", Email: "nam@sv.vn", UserName: "intern.nam", Pass: InternPassword, Role: "Intern", First: "Nam", Last: "Nguyễn Hoài", StudentId: (string?)"SV002", GPA: (decimal?)3.20m),
-            (Id: "U_INTERN_003", Email: "linh@sv.vn", UserName: "intern.linh", Pass: InternPassword, Role: "Intern", First: "Linh", Last: "Vũ Khánh", StudentId: (string?)"SV003", GPA: (decimal?)3.72m),
-            (Id: "U_INTERN_004", Email: "dung@sv.vn", UserName: "intern.dung", Pass: InternPassword, Role: "Intern", First: "Dũng", Last: "Phạm Minh", StudentId: (string?)"SV004", GPA: (decimal?)2.95m),
-            (Id: "U_INTERN_005", Email: "ha@sv.vn", UserName: "intern.ha", Pass: InternPassword, Role: "Intern", First: "Hà", Last: "Đỗ Ngọc", StudentId: (string?)"SV005", GPA: (decimal?)3.10m),
-            (Id: "U_INTERN_006", Email: "quan@sv.vn", UserName: "intern.quan", Pass: InternPassword, Role: "Intern", First: "Quân", Last: "Bùi Anh", StudentId: (string?)"SV006", GPA: (decimal?)3.60m),
-            (Id: "U_INTERN_007", Email: "hai@sv.vn", UserName: "intern.hai", Pass: InternPassword, Role: "Intern", First: "Hải", Last: "Trần Ngọc", StudentId: (string?)"SV007", GPA: (decimal?)3.50m),
-            (Id: "U_INTERN_008", Email: "thao@sv.vn", UserName: "intern.thao", Pass: InternPassword, Role: "Intern", First: "Thảo", Last: "Lê Phương", StudentId: (string?)"SV008", GPA: (decimal?)3.65m),
-            (Id: "U_INTERN_009", Email: "phong@sv.vn", UserName: "intern.phong", Pass: InternPassword, Role: "Intern", First: "Phong", Last: "Nguyễn Đình", StudentId: (string?)"SV009", GPA: (decimal?)3.15m),
-            (Id: "U_INTERN_010", Email: "yen@sv.vn", UserName: "intern.yen", Pass: InternPassword, Role: "Intern", First: "Yến", Last: "Hoàng Hải", StudentId: (string?)"SV010", GPA: (decimal?)3.80m),
-            (Id: "U_INTERN_011", Email: "cuong@sv.vn", UserName: "intern.cuong", Pass: InternPassword, Role: "Intern", First: "Cường", Last: "Vũ Quốc", StudentId: (string?)"SV011", GPA: (decimal?)3.00m),
-            (Id: "U_INTERN_012", Email: "mai@sv.vn", UserName: "intern.mai", Pass: InternPassword, Role: "Intern", First: "Mai", Last: "Đặng Phương", StudentId: (string?)"SV012", GPA: (decimal?)3.40m),
-            (Id: "U_INTERN_013", Email: "tuan@sv.vn", UserName: "intern.tuan", Pass: InternPassword, Role: "Intern", First: "Tuấn", Last: "Đinh Khắc", StudentId: (string?)"SV013", GPA: (decimal?)2.80m),
-            (Id: "U_INTERN_014", Email: "trang@sv.vn", UserName: "intern.trang", Pass: InternPassword, Role: "Intern", First: "Trang", Last: "Lý Thu", StudentId: (string?)"SV014", GPA: (decimal?)3.55m),
-            (Id: "U_INTERN_015", Email: "khoa@sv.vn", UserName: "intern.khoa", Pass: InternPassword, Role: "Intern", First: "Khoa", Last: "Hồ Đăng", StudentId: (string?)"SV015", GPA: (decimal?)3.70m),
-            (Id: "U_INTERN_016", Email: "binh@sv.vn", UserName: "intern.binh", Pass: InternPassword, Role: "Intern", First: "Bình", Last: "Trương Thanh", StudentId: (string?)"SV016", GPA: (decimal?)3.10m),
-            (Id: "U_INTERN_017", Email: "hoa@sv.vn", UserName: "intern.hoa", Pass: InternPassword, Role: "Intern", First: "Hoa", Last: "Ngô Quý", StudentId: (string?)"SV017", GPA: (decimal?)3.25m),
-            (Id: "U_INTERN_018", Email: "viet@sv.vn", UserName: "intern.viet", Pass: InternPassword, Role: "Intern", First: "Việt", Last: "Bùi Quang", StudentId: (string?)"SV018", GPA: (decimal?)2.90m),
-            (Id: "U_INTERN_019", Email: "giang@sv.vn", UserName: "intern.giang", Pass: InternPassword, Role: "Intern", First: "Giang", Last: "Phạm Hương", StudentId: (string?)"SV019", GPA: (decimal?)3.65m),
-            (Id: "U_INTERN_020", Email: "dat@sv.vn", UserName: "intern.dat", Pass: InternPassword, Role: "Intern", First: "Đạt", Last: "Nguyễn Thành", StudentId: (string?)"SV020", GPA: (decimal?)3.80m),
-            (Id: "U_INTERN_021", Email: "my@sv.vn", UserName: "intern.my", Pass: InternPassword, Role: "Intern", First: "My", Last: "Trần Trà", StudentId: (string?)"SV021", GPA: (decimal?)3.40m),
-            (Id: "U_INTERN_022", Email: "long@sv.vn", UserName: "intern.long", Pass: InternPassword, Role: "Intern", First: "Long", Last: "Hoàng Phi", StudentId: (string?)"SV022", GPA: (decimal?)2.85m),
-            (Id: "U_INTERN_023", Email: "han@sv.vn", UserName: "intern.han", Pass: InternPassword, Role: "Intern", First: "Hân", Last: "Đỗ Gia", StudentId: (string?)"SV023", GPA: (decimal?)3.90m),
-            (Id: "U_INTERN_024", Email: "son@sv.vn", UserName: "intern.son", Pass: InternPassword, Role: "Intern", First: "Sơn", Last: "Lê Tùng", StudentId: (string?)"SV024", GPA: (decimal?)3.05m),
-            (Id: "U_INTERN_025", Email: "an@sv.vn", UserName: "intern.an", Pass: InternPassword, Role: "Intern", First: "An", Last: "Vũ Bình", StudentId: (string?)"SV025", GPA: (decimal?)3.35m),
-            (Id: "U_INTERN_026", Email: "phuc@sv.vn", UserName: "intern.phuc", Pass: InternPassword, Role: "Intern", First: "Phúc", Last: "Nguyễn Hồng", StudentId: (string?)"SV026", GPA: (decimal?)3.15m),
-            (Id: "U_INTERN_027", Email: "tam@sv.vn", UserName: "intern.tam", Pass: InternPassword, Role: "Intern", First: "Tâm", Last: "Trần Minh", StudentId: (string?)"SV027", GPA: (decimal?)3.45m),
-            (Id: "U_INTERN_028", Email: "khanh@sv.vn", UserName: "intern.khanh", Pass: InternPassword, Role: "Intern", First: "Khánh", Last: "Lý Quốc", StudentId: (string?)"SV028", GPA: (decimal?)2.75m),
-            (Id: "U_INTERN_029", Email: "nhi@sv.vn", UserName: "intern.nhi", Pass: InternPassword, Role: "Intern", First: "Nhi", Last: "Đặng Yến", StudentId: (string?)"SV029", GPA: (decimal?)3.60m),
-            (Id: "U_INTERN_030", Email: "bao@sv.vn", UserName: "intern.bao", Pass: InternPassword, Role: "Intern", First: "Bảo", Last: "Phạm Gia", StudentId: (string?)"SV030", GPA: (decimal?)3.85m),
+            (Id:"U_ADMIN_001",  Email:"admin@deha.vn",    UserName:"admin",          Pass:AdminPassword,  Role:"Admin",  First:"Admin",  Last:"System",         StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_HR_001",     Email:"hr.minh@deha.vn",  UserName:"hr.minh",        Pass:HrPassword,     Role:"HR",     First:"Minh",   Last:"Nguyễn HR",      StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_HR_002",     Email:"hr.lan@deha.vn",   UserName:"hr.lan",         Pass:HrPassword,     Role:"HR",     First:"Lan",    Last:"Phạm HR",        StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_MENTOR_001", Email:"hoang@deha.vn",    UserName:"mentor.hoang",   Pass:MentorPassword, Role:"Mentor", First:"Hoàng",  Last:"Backend",        StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_MENTOR_002", Email:"anh@deha.vn",      UserName:"mentor.anh",     Pass:MentorPassword, Role:"Mentor", First:"Anh",    Last:"AI_NLP",         StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_MENTOR_003", Email:"duc@deha.vn",      UserName:"mentor.duc",     Pass:MentorPassword, Role:"Mentor", First:"Đức",    Last:"QA_QC",          StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_MENTOR_004", Email:"huong@deha.vn",    UserName:"mentor.huong",   Pass:MentorPassword, Role:"Mentor", First:"Hương",  Last:"BA_Lead",        StudentId:(string?)null, GPA:(decimal?)null, UniversityId:(int?)null),
+            (Id:"U_INTERN_001", Email:"thanh@sv.vn",      UserName:"intern.thanh",   Pass:InternPassword, Role:"Intern", First:"Thanh",  Last:"Trần Phương",    StudentId:"SV001", GPA:3.85m, UniversityId:7),
+            (Id:"U_INTERN_002", Email:"nam@sv.vn",        UserName:"intern.nam",     Pass:InternPassword, Role:"Intern", First:"Nam",    Last:"Nguyễn Hoài",    StudentId:"SV002", GPA:3.20m, UniversityId:2),
+            (Id:"U_INTERN_003", Email:"linh@sv.vn",       UserName:"intern.linh",    Pass:InternPassword, Role:"Intern", First:"Linh",   Last:"Vũ Khánh",       StudentId:"SV003", GPA:3.72m, UniversityId:3),
+            (Id:"U_INTERN_004", Email:"dung@sv.vn",       UserName:"intern.dung",    Pass:InternPassword, Role:"Intern", First:"Dũng",   Last:"Phạm Minh",      StudentId:"SV004", GPA:2.95m, UniversityId:4),
+            (Id:"U_INTERN_005", Email:"ha@sv.vn",         UserName:"intern.ha",      Pass:InternPassword, Role:"Intern", First:"Hà",     Last:"Đỗ Ngọc",        StudentId:"SV005", GPA:3.10m, UniversityId:5),
+            (Id:"U_INTERN_006", Email:"quan@sv.vn",       UserName:"intern.quan",    Pass:InternPassword, Role:"Intern", First:"Quân",   Last:"Bùi Anh",        StudentId:"SV006", GPA:3.60m, UniversityId:6),
+            (Id:"U_INTERN_007", Email:"hai@sv.vn",        UserName:"intern.hai",     Pass:InternPassword, Role:"Intern", First:"Hải",    Last:"Trần Ngọc",      StudentId:"SV007", GPA:3.50m, UniversityId:7),
+            (Id:"U_INTERN_008", Email:"thao@sv.vn",       UserName:"intern.thao",    Pass:InternPassword, Role:"Intern", First:"Thảo",   Last:"Lê Phương",      StudentId:"SV008", GPA:3.65m, UniversityId:8),
+            (Id:"U_INTERN_009", Email:"phong@sv.vn",      UserName:"intern.phong",   Pass:InternPassword, Role:"Intern", First:"Phong",  Last:"Nguyễn Đình",    StudentId:"SV009", GPA:3.15m, UniversityId:1),
+            (Id:"U_INTERN_010", Email:"yen@sv.vn",        UserName:"intern.yen",     Pass:InternPassword, Role:"Intern", First:"Yến",    Last:"Hoàng Hải",      StudentId:"SV010", GPA:3.80m, UniversityId:7),
+            (Id:"U_INTERN_011", Email:"cuong@sv.vn",      UserName:"intern.cuong",   Pass:InternPassword, Role:"Intern", First:"Cường",  Last:"Vũ Quốc",        StudentId:"SV011", GPA:3.00m, UniversityId:9),
+            (Id:"U_INTERN_012", Email:"mai@sv.vn",        UserName:"intern.mai",     Pass:InternPassword, Role:"Intern", First:"Mai",    Last:"Đặng Phương",    StudentId:"SV012", GPA:3.40m, UniversityId:10),
+            (Id:"U_INTERN_013", Email:"tuan@sv.vn",       UserName:"intern.tuan",    Pass:InternPassword, Role:"Intern", First:"Tuấn",   Last:"Đinh Khắc",      StudentId:"SV013", GPA:2.80m, UniversityId:11),
+            (Id:"U_INTERN_014", Email:"trang@sv.vn",      UserName:"intern.trang",   Pass:InternPassword, Role:"Intern", First:"Trang",  Last:"Lý Thu",         StudentId:"SV014", GPA:3.55m, UniversityId:12),
+            (Id:"U_INTERN_015", Email:"khoa@sv.vn",       UserName:"intern.khoa",    Pass:InternPassword, Role:"Intern", First:"Khoa",   Last:"Hồ Đăng",        StudentId:"SV015", GPA:3.70m, UniversityId:13),
+            (Id:"U_INTERN_016", Email:"binh@sv.vn",       UserName:"intern.binh",    Pass:InternPassword, Role:"Intern", First:"Bình",   Last:"Trương Thanh",   StudentId:"SV016", GPA:3.10m, UniversityId:14),
+            (Id:"U_INTERN_017", Email:"hoa@sv.vn",        UserName:"intern.hoa",     Pass:InternPassword, Role:"Intern", First:"Hoa",    Last:"Ngô Quý",        StudentId:"SV017", GPA:3.25m, UniversityId:15),
+            (Id:"U_INTERN_018", Email:"viet@sv.vn",       UserName:"intern.viet",    Pass:InternPassword, Role:"Intern", First:"Việt",   Last:"Bùi Quang",      StudentId:"SV018", GPA:2.90m, UniversityId:1),
+            (Id:"U_INTERN_019", Email:"giang@sv.vn",      UserName:"intern.giang",   Pass:InternPassword, Role:"Intern", First:"Giang",  Last:"Phạm Hương",     StudentId:"SV019", GPA:3.65m, UniversityId:2),
+            (Id:"U_INTERN_020", Email:"dat@sv.vn",        UserName:"intern.dat",     Pass:InternPassword, Role:"Intern", First:"Đạt",    Last:"Nguyễn Thành",   StudentId:"SV020", GPA:3.80m, UniversityId:3),
+            (Id:"U_INTERN_021", Email:"my@sv.vn",         UserName:"intern.my",      Pass:InternPassword, Role:"Intern", First:"My",     Last:"Trần Trà",       StudentId:"SV021", GPA:3.40m, UniversityId:4),
+            (Id:"U_INTERN_022", Email:"long@sv.vn",       UserName:"intern.long",    Pass:InternPassword, Role:"Intern", First:"Long",   Last:"Hoàng Phi",      StudentId:"SV022", GPA:2.85m, UniversityId:5),
+            (Id:"U_INTERN_023", Email:"han@sv.vn",        UserName:"intern.han",     Pass:InternPassword, Role:"Intern", First:"Hân",    Last:"Đỗ Gia",         StudentId:"SV023", GPA:3.90m, UniversityId:6),
+            (Id:"U_INTERN_024", Email:"son@sv.vn",        UserName:"intern.son",     Pass:InternPassword, Role:"Intern", First:"Sơn",    Last:"Lê Tùng",        StudentId:"SV024", GPA:3.05m, UniversityId:7),
+            (Id:"U_INTERN_025", Email:"an@sv.vn",         UserName:"intern.an",      Pass:InternPassword, Role:"Intern", First:"An",     Last:"Vũ Bình",        StudentId:"SV025", GPA:3.35m, UniversityId:8),
+            (Id:"U_INTERN_026", Email:"phuc@sv.vn",       UserName:"intern.phuc",    Pass:InternPassword, Role:"Intern", First:"Phúc",   Last:"Nguyễn Hồng",    StudentId:"SV026", GPA:3.15m, UniversityId:9),
+            (Id:"U_INTERN_027", Email:"tam@sv.vn",        UserName:"intern.tam",     Pass:InternPassword, Role:"Intern", First:"Tâm",    Last:"Trần Minh",      StudentId:"SV027", GPA:3.45m, UniversityId:10),
+            (Id:"U_INTERN_028", Email:"khanh@sv.vn",      UserName:"intern.khanh",   Pass:InternPassword, Role:"Intern", First:"Khánh",  Last:"Lý Quốc",        StudentId:"SV028", GPA:2.75m, UniversityId:11),
+            (Id:"U_INTERN_029", Email:"nhi@sv.vn",        UserName:"intern.nhi",     Pass:InternPassword, Role:"Intern", First:"Nhi",    Last:"Đặng Yến",       StudentId:"SV029", GPA:3.60m, UniversityId:12),
+            (Id:"U_INTERN_030", Email:"bao@sv.vn",        UserName:"intern.bao",     Pass:InternPassword, Role:"Intern", First:"Bảo",    Last:"Phạm Gia",       StudentId:"SV030", GPA:3.85m, UniversityId:13),
         };
 
         foreach (var u in users)
@@ -141,6 +166,7 @@ public static class DbInitializer
                     EmailConfirmed = true,
                     StudentId = u.StudentId,
                     GPA = u.GPA,
+                    UniversityId = u.UniversityId,
                     CreateDate = DateTime.UtcNow,
                 };
 
@@ -151,7 +177,6 @@ public static class DbInitializer
             }
             else
             {
-                // Reset mật khẩu mỗi lần seed để các account demo luôn đăng nhập được.
                 user.UserName = u.UserName;
                 user.NormalizedUserName = u.UserName.ToUpperInvariant();
                 user.Email = u.Email;
@@ -162,6 +187,7 @@ public static class DbInitializer
                 user.EmailConfirmed = true;
                 user.StudentId = u.StudentId;
                 user.GPA = u.GPA;
+                user.UniversityId = u.UniversityId;
                 user.PasswordHash = userManager.PasswordHasher.HashPassword(user, u.Pass);
 
                 var updateResult = await userManager.UpdateAsync(user);
@@ -183,762 +209,602 @@ public static class DbInitializer
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Bước 2 — Bulk seed toàn bộ dữ liệu qua SQL (UPSERT an toàn)
+    // Bước 2 — Bulk seed toàn bộ dữ liệu qua PL/pgSQL DO block
     // ═══════════════════════════════════════════════════════════
 
     private const string FullScaleSeedSql = """
-        -- ╔══════════════════════════════════════════════════════════╗
-        -- ║  AIMS FULL SCALE SEED DATA — SAFE UPSERT / NO DELETE    ║
-        -- ║  Chạy lại nhiều lần không lỗi duplicate key             ║
-        -- ╚══════════════════════════════════════════════════════════╝
-
-        -- Cleanup IDENTITY_INSERT state nếu session trước bị crash giữa chừng
-        DECLARE @IdentityTables TABLE (TableName sysname);
-        INSERT INTO @IdentityTables (TableName) VALUES
-            (N'Universities'), (N'JobPositions'), (N'JobDescriptions'),
-            (N'Applications'), (N'CVParsedDatas'), (N'AIScreeningResults'),
-            (N'Courses'), (N'CourseChapters'), (N'Lessons'),
-            (N'InternshipPeriods');
-
-        DECLARE @T sysname, @Sql nvarchar(max);
-        DECLARE cur CURSOR LOCAL FAST_FORWARD FOR SELECT TableName FROM @IdentityTables;
-        OPEN cur; FETCH NEXT FROM cur INTO @T;
-        WHILE @@FETCH_STATUS = 0
+        DO $$
+        DECLARE
+            v_now         TIMESTAMPTZ := NOW();
+            v_report_date DATE        := (CURRENT_DATE - INTERVAL '1 day')::DATE;
         BEGIN
-            BEGIN TRY
-                SET @Sql = N'SET IDENTITY_INSERT dbo.' + QUOTENAME(@T) + N' OFF;';
-                EXEC sp_executesql @Sql;
-            END TRY BEGIN CATCH END CATCH;
-            FETCH NEXT FROM cur INTO @T;
+
+        -- ╔══════════════════════════════════════════════════════════════╗
+        -- ║  AIMS FULL SCALE SEED DATA — PostgreSQL Safe UPSERT         ║
+        -- ║  Chạy lại nhiều lần không lỗi duplicate key                 ║
+        -- ╚══════════════════════════════════════════════════════════════╝
+
+        ------------------------------------------------------------
+        -- AppRoles
+        -- ON CONFLICT target: NormalizedName (unique index từ Identity)
+        ------------------------------------------------------------
+        INSERT INTO "AppRoles" ("Id", "Name", "NormalizedName", "Description", "ConcurrencyStamp")
+        VALUES
+            ('ROLE_ADMIN',  'Admin',  'ADMIN',  'Quản trị viên hệ thống, toàn quyền', gen_random_uuid()::TEXT),
+            ('ROLE_HR',     'HR',     'HR',     'Nhân viên tuyển dụng',                gen_random_uuid()::TEXT),
+            ('ROLE_MENTOR', 'Mentor', 'MENTOR', 'Người hướng dẫn thực tập sinh',       gen_random_uuid()::TEXT),
+            ('ROLE_INTERN', 'Intern', 'INTERN', 'Thực tập sinh',                        gen_random_uuid()::TEXT)
+        ON CONFLICT ("NormalizedName") DO UPDATE SET
+            "Description" = EXCLUDED."Description",
+            "Name"        = EXCLUDED."Name";
+
+        ------------------------------------------------------------
+        -- Commands
+        ------------------------------------------------------------
+        INSERT INTO "Commands" ("Id", "Name") VALUES
+            ('VIEW',      'Xem'),
+            ('CREATE',    'Tạo'),
+            ('UPDATE',    'Sửa'),
+            ('DELETE',    'Xóa'),
+            ('APPROVE',   'Duyệt'),
+            ('IMPORT_CV', 'Import CV'),
+            ('AI_SCREEN', 'Sàng lọc AI'),
+            ('EXPORT',    'Xuất DB')
+        ON CONFLICT ("Id") DO NOTHING;
+
+        ------------------------------------------------------------
+        -- Functions
+        ------------------------------------------------------------
+        INSERT INTO "Functions" ("Id", "Name", "Url", "Icon", "SortOrder", "ParentId") VALUES
+            ('DASHBOARD',       'Tổng quan',    '/dashboard',                    'fa fa-chart-line',     1, NULL),
+            ('RECRUITMENT',     'Tuyển dụng',   '/recruitment',                  'fa fa-user-check',     2, NULL),
+            ('LMS',             'Đào tạo',      '/lms',                          'fa fa-graduation-cap', 3, NULL),
+            ('TASK_MANAGEMENT', 'Thực tập',     '/tasks',                        'fa fa-tasks',          4, NULL),
+            ('REPORT',          'Báo cáo',      '/reports',                      'fa fa-file-alt',       5, NULL),
+            ('CV_SCREENING',    'Sàng lọc AI',  '/recruitment/cv-screening',     'fa fa-robot',          1, 'RECRUITMENT'),
+            ('JOB_DESCRIPTION', 'Mô tả JD',     '/recruitment/job-descriptions', 'fa fa-briefcase',      2, 'RECRUITMENT'),
+            ('COURSE',          'Khóa học',     '/lms/courses',                  'fa fa-book',           1, 'LMS'),
+            ('INTERN_TASK',     'Nhiệm vụ',     '/tasks/intern-tasks',           'fa fa-list-check',     1, 'TASK_MANAGEMENT'),
+            ('DAILY_REPORT',    'Báo cáo ngày', '/tasks/daily-reports',          'fa fa-pen',            2, 'TASK_MANAGEMENT'),
+            ('TIMESHEET',       'Chấm công',    '/tasks/timesheets',             'fa fa-clock',          3, 'TASK_MANAGEMENT')
+        ON CONFLICT ("Id") DO NOTHING;
+
+        ------------------------------------------------------------
+        -- CommandInFunctions  (composite PK: CommandId + FunctionId)
+        ------------------------------------------------------------
+        INSERT INTO "CommandInFunctions" ("CommandId", "FunctionId")
+        SELECT c."Id", f."Id"
+        FROM "Commands" c
+        CROSS JOIN "Functions" f
+        WHERE c."Id" IN ('VIEW','CREATE','UPDATE','DELETE','EXPORT')
+        ON CONFLICT DO NOTHING;
+
+        ------------------------------------------------------------
+        -- Permissions cho Admin  (composite PK: FunctionId+RoleId+CommandId)
+        ------------------------------------------------------------
+        INSERT INTO "Permissions" ("FunctionId", "RoleId", "CommandId")
+        SELECT cif."FunctionId", r."Id", cif."CommandId"
+        FROM "CommandInFunctions" cif
+        CROSS JOIN "AppRoles" r
+        WHERE r."NormalizedName" = 'ADMIN'
+        ON CONFLICT DO NOTHING;
+
+        ------------------------------------------------------------
+        -- Permissions cho Mentor / HR / Intern
+        ------------------------------------------------------------
+        INSERT INTO "Permissions" ("FunctionId", "RoleId", "CommandId")
+        SELECT src."FunctionId", r."Id", src."CommandId"
+        FROM (VALUES
+            ('MENTOR', 'INTERN_TASK',     'VIEW'),
+            ('MENTOR', 'INTERN_TASK',     'CREATE'),
+            ('MENTOR', 'INTERN_TASK',     'UPDATE'),
+            ('MENTOR', 'INTERN_TASK',     'DELETE'),
+            ('MENTOR', 'DAILY_REPORT',    'VIEW'),
+            ('MENTOR', 'DAILY_REPORT',    'UPDATE'),
+            ('MENTOR', 'JOB_DESCRIPTION', 'VIEW'),
+            ('MENTOR', 'JOB_DESCRIPTION', 'CREATE'),
+            ('MENTOR', 'JOB_DESCRIPTION', 'UPDATE'),
+            ('MENTOR', 'CV_SCREENING',    'VIEW'),
+            ('MENTOR', 'CV_SCREENING',    'CREATE'),
+            ('HR',     'JOB_DESCRIPTION', 'VIEW'),
+            ('HR',     'JOB_DESCRIPTION', 'CREATE'),
+            ('HR',     'JOB_DESCRIPTION', 'UPDATE'),
+            ('HR',     'JOB_DESCRIPTION', 'DELETE'),
+            ('HR',     'CV_SCREENING',    'VIEW'),
+            ('HR',     'CV_SCREENING',    'CREATE'),
+            ('HR',     'CV_SCREENING',    'UPDATE'),
+            ('HR',     'CV_SCREENING',    'DELETE'),
+            ('INTERN', 'INTERN_TASK',     'VIEW'),
+            ('INTERN', 'INTERN_TASK',     'UPDATE'),
+            ('INTERN', 'DAILY_REPORT',    'VIEW'),
+            ('INTERN', 'DAILY_REPORT',    'CREATE')
+        ) AS src("RoleName", "FunctionId", "CommandId")
+        INNER JOIN "AppRoles" r ON r."NormalizedName" = src."RoleName"
+        ON CONFLICT DO NOTHING;
+
+        ------------------------------------------------------------
+        -- Universities  (explicit Id → reset sequence sau)
+        ------------------------------------------------------------
+        INSERT INTO "Universities" ("Id", "Name", "City") VALUES
+            (1,  'Đại học Bách khoa Hà Nội',      'Hà Nội'),
+            (2,  'Đại học Công nghệ - ĐHQGHN',    'Hà Nội'),
+            (3,  'Học viện Công nghệ BCVT',        'Hà Nội'),
+            (4,  'Đại học FPT',                    'Hà Nội'),
+            (5,  'Đại học KHTN - ĐHQG TP.HCM',    'TP.HCM'),
+            (6,  'Đại học Duy Tân',                'Đà Nẵng'),
+            (7,  'Đại học Thương Mại (TMU)',       'Hà Nội'),
+            (8,  'Đại học Kinh tế Quốc dân',      'Hà Nội'),
+            (9,  'Đại học Giao thông Vận tải',    'Hà Nội'),
+            (10, 'Học viện Ngân hàng',             'Hà Nội'),
+            (11, 'Học viện Kỹ thuật Mật mã',      'Hà Nội'),
+            (12, 'Đại học Công nghiệp Hà Nội',    'Hà Nội'),
+            (13, 'Đại học Sư phạm Kỹ thuật',      'TP.HCM'),
+            (14, 'Đại học Bách khoa TP.HCM',      'TP.HCM'),
+            (15, 'Đại học Tôn Đức Thắng',         'TP.HCM')
+        ON CONFLICT ("Id") DO NOTHING;
+        -- Reset sequence để auto-increment tiếp theo không bị conflict
+        PERFORM setval(
+            pg_get_serial_sequence('"Universities"', 'Id'),
+            (SELECT MAX("Id") FROM "Universities")
+        );
+
+        ------------------------------------------------------------
+        -- AppUsers bulk (37 users)
+        -- Những user đã tạo bởi C# ở trên → WHEN MATCHED chỉ update
+        -- các trường phi-security, KHÔNG đụng PasswordHash.
+        -- Những user chưa có → INSERT với PasswordHash = 'HASH' (demo).
+        ------------------------------------------------------------
+        INSERT INTO "AppUsers" (
+            "Id", "FirstName", "LastName", "IsActive", "CreateDate",
+            "UserName", "NormalizedUserName", "Email", "NormalizedEmail",
+            "EmailConfirmed", "PasswordHash", "SecurityStamp", "ConcurrencyStamp",
+            "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnabled",
+            "AccessFailedCount", "StudentId", "UniversityId", "GPA"
+        ) VALUES
+            -- Admin
+            ('U_ADMIN_001',  'Admin',  'System',        TRUE, NOW(), 'admin',         'ADMIN',         'admin@deha.vn',    'ADMIN@DEHA.VN',    TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            -- HR
+            ('U_HR_001',     'Minh',   'Nguyễn HR',     TRUE, NOW(), 'hr.minh',       'HR.MINH',       'hr.minh@deha.vn',  'HR.MINH@DEHA.VN',  TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            ('U_HR_002',     'Lan',    'Phạm HR',       TRUE, NOW(), 'hr.lan',        'HR.LAN',        'hr.lan@deha.vn',   'HR.LAN@DEHA.VN',   TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            -- Mentor
+            ('U_MENTOR_001', 'Hoàng',  'Backend',       TRUE, NOW(), 'mentor.hoang',  'MENTOR.HOANG',  'hoang@deha.vn',    'HOANG@DEHA.VN',    TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            ('U_MENTOR_002', 'Anh',    'AI_NLP',        TRUE, NOW(), 'mentor.anh',    'MENTOR.ANH',    'anh@deha.vn',      'ANH@DEHA.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            ('U_MENTOR_003', 'Đức',    'QA_QC',         TRUE, NOW(), 'mentor.duc',    'MENTOR.DUC',    'duc@deha.vn',      'DUC@DEHA.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            ('U_MENTOR_004', 'Hương',  'BA_Lead',       TRUE, NOW(), 'mentor.huong',  'MENTOR.HUONG',  'huong@deha.vn',    'HUONG@DEHA.VN',    TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, NULL,    NULL, NULL),
+            -- Intern
+            ('U_INTERN_001', 'Thanh',  'Trần Phương',   TRUE, NOW(), 'intern.thanh',  'INTERN.THANH',  'thanh@sv.vn',      'THANH@SV.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV001', 7,  3.85),
+            ('U_INTERN_002', 'Nam',    'Nguyễn Hoài',   TRUE, NOW(), 'intern.nam',    'INTERN.NAM',    'nam@sv.vn',        'NAM@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV002', 2,  3.20),
+            ('U_INTERN_003', 'Linh',   'Vũ Khánh',      TRUE, NOW(), 'intern.linh',   'INTERN.LINH',   'linh@sv.vn',       'LINH@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV003', 3,  3.72),
+            ('U_INTERN_004', 'Dũng',   'Phạm Minh',     TRUE, NOW(), 'intern.dung',   'INTERN.DUNG',   'dung@sv.vn',       'DUNG@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV004', 4,  2.95),
+            ('U_INTERN_005', 'Hà',     'Đỗ Ngọc',       TRUE, NOW(), 'intern.ha',     'INTERN.HA',     'ha@sv.vn',         'HA@SV.VN',         TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV005', 5,  3.10),
+            ('U_INTERN_006', 'Quân',   'Bùi Anh',       TRUE, NOW(), 'intern.quan',   'INTERN.QUAN',   'quan@sv.vn',       'QUAN@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV006', 6,  3.60),
+            ('U_INTERN_007', 'Hải',    'Trần Ngọc',     TRUE, NOW(), 'intern.hai',    'INTERN.HAI',    'hai@sv.vn',        'HAI@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV007', 7,  3.50),
+            ('U_INTERN_008', 'Thảo',   'Lê Phương',     TRUE, NOW(), 'intern.thao',   'INTERN.THAO',   'thao@sv.vn',       'THAO@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV008', 8,  3.65),
+            ('U_INTERN_009', 'Phong',  'Nguyễn Đình',   TRUE, NOW(), 'intern.phong',  'INTERN.PHONG',  'phong@sv.vn',      'PHONG@SV.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV009', 1,  3.15),
+            ('U_INTERN_010', 'Yến',    'Hoàng Hải',     TRUE, NOW(), 'intern.yen',    'INTERN.YEN',    'yen@sv.vn',        'YEN@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV010', 7,  3.80),
+            ('U_INTERN_011', 'Cường',  'Vũ Quốc',       TRUE, NOW(), 'intern.cuong',  'INTERN.CUONG',  'cuong@sv.vn',      'CUONG@SV.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV011', 9,  3.00),
+            ('U_INTERN_012', 'Mai',    'Đặng Phương',   TRUE, NOW(), 'intern.mai',    'INTERN.MAI',    'mai@sv.vn',        'MAI@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV012', 10, 3.40),
+            ('U_INTERN_013', 'Tuấn',   'Đinh Khắc',     TRUE, NOW(), 'intern.tuan',   'INTERN.TUAN',   'tuan@sv.vn',       'TUAN@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV013', 11, 2.80),
+            ('U_INTERN_014', 'Trang',  'Lý Thu',        TRUE, NOW(), 'intern.trang',  'INTERN.TRANG',  'trang@sv.vn',      'TRANG@SV.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV014', 12, 3.55),
+            ('U_INTERN_015', 'Khoa',   'Hồ Đăng',       TRUE, NOW(), 'intern.khoa',   'INTERN.KHOA',   'khoa@sv.vn',       'KHOA@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV015', 13, 3.70),
+            ('U_INTERN_016', 'Bình',   'Trương Thanh',  TRUE, NOW(), 'intern.binh',   'INTERN.BINH',   'binh@sv.vn',       'BINH@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV016', 14, 3.10),
+            ('U_INTERN_017', 'Hoa',    'Ngô Quý',       TRUE, NOW(), 'intern.hoa',    'INTERN.HOA',    'hoa@sv.vn',        'HOA@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV017', 15, 3.25),
+            ('U_INTERN_018', 'Việt',   'Bùi Quang',     TRUE, NOW(), 'intern.viet',   'INTERN.VIET',   'viet@sv.vn',       'VIET@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV018', 1,  2.90),
+            ('U_INTERN_019', 'Giang',  'Phạm Hương',    TRUE, NOW(), 'intern.giang',  'INTERN.GIANG',  'giang@sv.vn',      'GIANG@SV.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV019', 2,  3.65),
+            ('U_INTERN_020', 'Đạt',    'Nguyễn Thành',  TRUE, NOW(), 'intern.dat',    'INTERN.DAT',    'dat@sv.vn',        'DAT@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV020', 3,  3.80),
+            ('U_INTERN_021', 'My',     'Trần Trà',      TRUE, NOW(), 'intern.my',     'INTERN.MY',     'my@sv.vn',         'MY@SV.VN',         TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV021', 4,  3.40),
+            ('U_INTERN_022', 'Long',   'Hoàng Phi',     TRUE, NOW(), 'intern.long',   'INTERN.LONG',   'long@sv.vn',       'LONG@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV022', 5,  2.85),
+            ('U_INTERN_023', 'Hân',    'Đỗ Gia',        TRUE, NOW(), 'intern.han',    'INTERN.HAN',    'han@sv.vn',        'HAN@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV023', 6,  3.90),
+            ('U_INTERN_024', 'Sơn',    'Lê Tùng',       TRUE, NOW(), 'intern.son',    'INTERN.SON',    'son@sv.vn',        'SON@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV024', 7,  3.05),
+            ('U_INTERN_025', 'An',     'Vũ Bình',       TRUE, NOW(), 'intern.an',     'INTERN.AN',     'an@sv.vn',         'AN@SV.VN',         TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV025', 8,  3.35),
+            ('U_INTERN_026', 'Phúc',   'Nguyễn Hồng',   TRUE, NOW(), 'intern.phuc',   'INTERN.PHUC',   'phuc@sv.vn',       'PHUC@SV.VN',       TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV026', 9,  3.15),
+            ('U_INTERN_027', 'Tâm',    'Trần Minh',     TRUE, NOW(), 'intern.tam',    'INTERN.TAM',    'tam@sv.vn',        'TAM@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV027', 10, 3.45),
+            ('U_INTERN_028', 'Khánh',  'Lý Quốc',       TRUE, NOW(), 'intern.khanh',  'INTERN.KHANH',  'khanh@sv.vn',      'KHANH@SV.VN',      TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV028', 11, 2.75),
+            ('U_INTERN_029', 'Nhi',    'Đặng Yến',      TRUE, NOW(), 'intern.nhi',    'INTERN.NHI',    'nhi@sv.vn',        'NHI@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV029', 12, 3.60),
+            ('U_INTERN_030', 'Bảo',    'Phạm Gia',      TRUE, NOW(), 'intern.bao',    'INTERN.BAO',    'bao@sv.vn',        'BAO@SV.VN',        TRUE, 'HASH', gen_random_uuid()::TEXT, gen_random_uuid()::TEXT, TRUE, FALSE, TRUE, 0, 'SV030', 13, 3.85)
+        ON CONFLICT ("Id") DO UPDATE SET
+            "FirstName"    = EXCLUDED."FirstName",
+            "LastName"     = EXCLUDED."LastName",
+            "IsActive"     = EXCLUDED."IsActive",
+            "StudentId"    = EXCLUDED."StudentId",
+            "UniversityId" = EXCLUDED."UniversityId",
+            "GPA"          = EXCLUDED."GPA";
+        -- ⚠️ PasswordHash KHÔNG được update ở đây → tránh ghi đè hash thực của C#
+
+        ------------------------------------------------------------
+        -- UserRoles
+        ------------------------------------------------------------
+        INSERT INTO "UserRoles" ("UserId", "RoleId")
+        SELECT u."Id", r."Id"
+        FROM "AppUsers" u
+        INNER JOIN "AppRoles" r ON r."NormalizedName" = CASE
+            WHEN u."Id" LIKE 'U_ADMIN%'  THEN 'ADMIN'
+            WHEN u."Id" LIKE 'U_HR%'     THEN 'HR'
+            WHEN u."Id" LIKE 'U_MENTOR%' THEN 'MENTOR'
+            WHEN u."Id" LIKE 'U_INTERN%' THEN 'INTERN'
         END
-        CLOSE cur; DEALLOCATE cur;
+        WHERE u."Id" LIKE 'U_%'
+        ON CONFLICT ("UserId", "RoleId") DO NOTHING;
 
-        SET NOCOUNT ON;
-        SET XACT_ABORT ON;
+        ------------------------------------------------------------
+        -- JobPositions
+        ------------------------------------------------------------
+        INSERT INTO "JobPositions" ("Id", "Title", "Description", "IsActive", "CreateDate") VALUES
+            (1,  '.NET Backend',     'API, EF Core',             TRUE, NOW()),
+            (2,  'Frontend',         'Web MVC, React',           TRUE, NOW()),
+            (3,  'AI/NLP',           'Xử lý văn bản, TF-IDF',   TRUE, NOW()),
+            (4,  'QA/QC',            'Test Case, k6',            TRUE, NOW()),
+            (5,  'Business Analyst', 'FRS, Use Case',            TRUE, NOW()),
+            (6,  'Mobile App',       'React Native, Flutter',    TRUE, NOW()),
+            (7,  'Data Analyst',     'SQL, PowerBI',             TRUE, NOW()),
+            (8,  'DevOps',           'CI/CD, Docker, AWS',       TRUE, NOW()),
+            (9,  'UI/UX Design',     'Figma, Prototype',         TRUE, NOW()),
+            (10, 'NodeJS Backend',   'Express, MongoDB',         TRUE, NOW())
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"JobPositions"', 'Id'),
+            (SELECT MAX("Id") FROM "JobPositions")
+        );
 
-        DECLARE @SeedDate datetime2 = CONVERT(date, GETDATE());
-        DECLARE @DemoReportDate datetime2 = DATEADD(DAY, -1, @SeedDate);
+        ------------------------------------------------------------
+        -- JobDescriptions
+        ------------------------------------------------------------
+        INSERT INTO "JobDescriptions" (
+            "Id", "JobPositionId", "Title", "DetailContent", "RequiredSkills",
+            "MinGPA", "CreatedByUserId", "Status", "CreateDate", "DeadlineDate"
+        ) VALUES
+            (1,  1, 'JD .NET Backend - Đợt 1',  'Phát triển API bằng ASP.NET Core.',             'C#, ASP.NET Core, SQL Server', 3.0, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (2,  2, 'JD Frontend Web - Đợt 1',  'Thiết kế giao diện trên nền tảng Web.',         'HTML, CSS, JS, React',         2.8, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (3,  3, 'JD AI/NLP - Đợt 1',        'Nghiên cứu mô hình bóc tách dữ liệu văn bản.', 'Python, ML.NET, NLP',          3.2, 'U_HR_002', 'OPEN',   NOW(), NOW() + INTERVAL '45 days'),
+            (4,  4, 'JD Tester/QA - Đợt 1',     'Viết kịch bản test, chạy script hiệu năng.',   'Manual Test, API Test, k6',    2.8, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (5,  5, 'JD BA Intern - Đợt 1',     'Lấy yêu cầu khách hàng, viết FRS.',            'UML, FRS, Use Case',           3.0, 'U_HR_002', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (6,  6, 'JD Mobile React Native',    'Build ứng dụng mobile đa nền tảng.',           'React Native, JS/TS',          2.8, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (7,  7, 'JD Data Analyst Intern',    'Xử lý số liệu, làm Dashboard thống kê.',       'SQL, Python, PowerBI',         3.2, 'U_HR_002', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (8,  8, 'JD DevOps Intern',          'Cấu hình môi trường, đẩy Docker lên AWS.',     'Linux, Docker, AWS ECR',       3.0, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (9,  9, 'JD UI/UX Intern',           'Làm Wireframe, Prototype cho module LMS.',     'Figma, UI/UX Principles',      2.8, 'U_HR_002', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (10,10, 'JD NodeJS Backend',         'Phát triển API bằng NodeJS.',                  'NodeJS, Express, MongoDB',     3.0, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (11, 1, 'JD .NET Backend - Đợt 2',  'Xây dựng Microservices với C#.',               'C#, Microservices, Docker',    3.2, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (12, 5, 'JD BA Intern - Đợt 2',     'Tối ưu quy trình tuyển dụng thông minh.',     'BPMN, SQL Cơ bản, FRS',        3.0, 'U_HR_002', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (13, 4, 'JD Automation QA',          'Làm Automation test bằng C# và Selenium.',    'Selenium, k6, C#',             3.0, 'U_HR_001', 'OPEN',   NOW(), NOW() + INTERVAL '30 days'),
+            (14, 2, 'JD Frontend VueJS',         'Dùng VueJS làm giao diện Dashboard.',         'VueJS, TailwindCSS',           2.8, 'U_HR_001', 'CLOSED', NOW(), NOW() - INTERVAL '5 days'),
+            (15, 8, 'JD Cloud/DevOps',           'Triển khai dự án lên nền tảng Azure.',        'Azure, Kubernetes',            3.5, 'U_HR_002', 'CLOSED', NOW(), NOW() - INTERVAL '5 days')
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"JobDescriptions"', 'Id'),
+            (SELECT MAX("Id") FROM "JobDescriptions")
+        );
 
-        BEGIN TRY
-            BEGIN TRANSACTION;
+        ------------------------------------------------------------
+        -- Applications
+        ------------------------------------------------------------
+        INSERT INTO "Applications" (
+            "Id", "ApplicantUserId", "JobDescriptionId", "CVFileUrl",
+            "CoverLetter", "ApplyDate", "Status"
+        ) VALUES
+            (1,  'U_INTERN_001', 1,  '/cv/1.pdf',  'Xin ứng tuyển vào vị trí Backend.',  NOW() - INTERVAL '15 days', 'ACCEPTED'),
+            (2,  'U_INTERN_002', 1,  '/cv/2.pdf',  'Xin ứng tuyển vào vị trí Backend.',  NOW() - INTERVAL '14 days', 'INTERVIEW'),
+            (3,  'U_INTERN_003', 3,  '/cv/3.pdf',  'Xin ứng tuyển vào vị trí AI NLP.',   NOW() - INTERVAL '13 days', 'ACCEPTED'),
+            (4,  'U_INTERN_004', 2,  '/cv/4.pdf',  'Xin ứng tuyển vào vị trí Frontend.', NOW() - INTERVAL '12 days', 'PENDING'),
+            (5,  'U_INTERN_005', 2,  '/cv/5.pdf',  'Xin ứng tuyển vào vị trí Frontend.', NOW() - INTERVAL '11 days', 'REJECTED'),
+            (6,  'U_INTERN_006', 3,  '/cv/6.pdf',  'Xin ứng tuyển vào vị trí AI NLP.',   NOW() - INTERVAL '10 days', 'SCREENING'),
+            (7,  'U_INTERN_007', 4,  '/cv/7.pdf',  'Xin ứng tuyển vào vị trí QA/QC.',    NOW() - INTERVAL '10 days', 'ACCEPTED'),
+            (8,  'U_INTERN_008', 5,  '/cv/8.pdf',  'Xin ứng tuyển vào vị trí BA.',       NOW() - INTERVAL '9 days',  'ACCEPTED'),
+            (9,  'U_INTERN_009', 1,  '/cv/9.pdf',  'Xin ứng tuyển vào vị trí Backend.',  NOW() - INTERVAL '8 days',  'SCREENING'),
+            (10, 'U_INTERN_010', 5,  '/cv/10.pdf', 'Xin ứng tuyển vào vị trí BA.',       NOW() - INTERVAL '7 days',  'INTERVIEW'),
+            (11, 'U_INTERN_011', 6,  '/cv/11.pdf', 'Xin ứng tuyển vào vị trí Mobile.',   NOW() - INTERVAL '6 days',  'ACCEPTED'),
+            (12, 'U_INTERN_012', 7,  '/cv/12.pdf', 'Xin ứng tuyển vào vị trí Data.',     NOW() - INTERVAL '5 days',  'PENDING'),
+            (13, 'U_INTERN_013', 8,  '/cv/13.pdf', 'Xin ứng tuyển vào vị trí DevOps.',   NOW() - INTERVAL '4 days',  'INTERVIEW'),
+            (14, 'U_INTERN_014', 9,  '/cv/14.pdf', 'Xin ứng tuyển vào vị trí UI/UX.',    NOW() - INTERVAL '3 days',  'ACCEPTED'),
+            (15, 'U_INTERN_015', 10, '/cv/15.pdf', 'Xin ứng tuyển vào vị trí NodeJS.',   NOW() - INTERVAL '2 days',  'ACCEPTED'),
+            (16, 'U_INTERN_016', 1,  '/cv/16.pdf', 'Xin ứng tuyển vào vị trí Backend.',  NOW() - INTERVAL '15 days', 'REJECTED'),
+            (17, 'U_INTERN_017', 2,  '/cv/17.pdf', 'Xin ứng tuyển vào vị trí Frontend.', NOW() - INTERVAL '14 days', 'SCREENING'),
+            (18, 'U_INTERN_018', 3,  '/cv/18.pdf', 'Xin ứng tuyển vào vị trí AI NLP.',   NOW() - INTERVAL '13 days', 'ACCEPTED'),
+            (19, 'U_INTERN_019', 4,  '/cv/19.pdf', 'Xin ứng tuyển vào vị trí QA/QC.',    NOW() - INTERVAL '12 days', 'PENDING'),
+            (20, 'U_INTERN_020', 5,  '/cv/20.pdf', 'Xin ứng tuyển vào vị trí BA.',       NOW() - INTERVAL '11 days', 'INTERVIEW'),
+            (21, 'U_INTERN_021', 6,  '/cv/21.pdf', 'Xin ứng tuyển vào vị trí Mobile.',   NOW() - INTERVAL '10 days', 'ACCEPTED'),
+            (22, 'U_INTERN_022', 7,  '/cv/22.pdf', 'Xin ứng tuyển vào vị trí Data.',     NOW() - INTERVAL '9 days',  'REJECTED'),
+            (23, 'U_INTERN_023', 8,  '/cv/23.pdf', 'Xin ứng tuyển vào vị trí DevOps.',   NOW() - INTERVAL '8 days',  'ACCEPTED'),
+            (24, 'U_INTERN_024', 9,  '/cv/24.pdf', 'Xin ứng tuyển vào vị trí UI/UX.',    NOW() - INTERVAL '7 days',  'SCREENING'),
+            (25, 'U_INTERN_025', 10, '/cv/25.pdf', 'Xin ứng tuyển vào vị trí NodeJS.',   NOW() - INTERVAL '6 days',  'PENDING'),
+            (26, 'U_INTERN_026', 11, '/cv/26.pdf', 'Xin ứng tuyển Backend đợt 2.',        NOW() - INTERVAL '5 days',  'ACCEPTED'),
+            (27, 'U_INTERN_027', 12, '/cv/27.pdf', 'Xin ứng tuyển BA đợt 2.',             NOW() - INTERVAL '4 days',  'INTERVIEW'),
+            (28, 'U_INTERN_028', 13, '/cv/28.pdf', 'Xin ứng tuyển QA Automation.',        NOW() - INTERVAL '3 days',  'ACCEPTED'),
+            (29, 'U_INTERN_029', 4,  '/cv/29.pdf', 'Xin ứng tuyển vào vị trí QA/QC.',    NOW() - INTERVAL '2 days',  'SCREENING'),
+            (30, 'U_INTERN_030', 5,  '/cv/30.pdf', 'Xin ứng tuyển vào vị trí BA.',       NOW() - INTERVAL '1 day',   'ACCEPTED')
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"Applications"', 'Id'),
+            (SELECT MAX("Id") FROM "Applications")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT AppRoles
-            -- ⚠️ Id PHẢI khớp với SeedRolesAsync() trong C# ở trên.
-            --    MERGE dùng ON NormalizedName nên nếu C# đã tạo role
-            --    với Id='ROLE_ADMIN', MERGE sẽ UPDATE chứ không INSERT mới.
-            ------------------------------------------------------------
-            ;WITH Source ([Id], [Description], [Name], [NormalizedName], [ConcurrencyStamp]) AS
-            (
-                SELECT * FROM (VALUES
-                    (N'ROLE_ADMIN',  N'Quản trị viên hệ thống, toàn quyền', N'Admin',  N'ADMIN',  NEWID()),
-                    (N'ROLE_HR',     N'Nhân viên tuyển dụng',                N'HR',     N'HR',     NEWID()),
-                    (N'ROLE_MENTOR', N'Người hướng dẫn thực tập sinh',       N'Mentor', N'MENTOR', NEWID()),
-                    (N'ROLE_INTERN', N'Thực tập sinh',                        N'Intern', N'INTERN', NEWID())
-                ) AS V ([Id], [Description], [Name], [NormalizedName], [ConcurrencyStamp])
-            )
-            MERGE [AppRoles] AS T
-            USING Source AS S ON T.[NormalizedName] = S.[NormalizedName]
-            WHEN MATCHED THEN
-                UPDATE SET T.[Description] = S.[Description], T.[Name] = S.[Name]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Description], [Name], [NormalizedName], [ConcurrencyStamp])
-                VALUES (S.[Id], S.[Description], S.[Name], S.[NormalizedName], S.[ConcurrencyStamp]);
+        ------------------------------------------------------------
+        -- CVParsedDatas  (insert nếu chưa có theo ApplicationId)
+        ------------------------------------------------------------
+        INSERT INTO "CVParsedDatas" (
+            "Id", "ApplicationId", "FullName", "EmailExtracted",
+            "SkillsExtracted", "RawText", "ParsedAt"
+        )
+        SELECT
+            a."Id",
+            a."Id",
+            'Ứng viên ' || a."Id"::TEXT,
+            'uv' || a."Id"::TEXT || '@gmail.com',
+            'C#, SQL, Git, UML, Postman, k6',
+            'Dữ liệu CV bóc tách thô...',
+            NOW()
+        FROM "Applications" a
+        WHERE NOT EXISTS (
+            SELECT 1 FROM "CVParsedDatas" cv WHERE cv."ApplicationId" = a."Id"
+        );
+        PERFORM setval(
+            pg_get_serial_sequence('"CVParsedDatas"', 'Id'),
+            (SELECT MAX("Id") FROM "CVParsedDatas")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT Commands
-            ------------------------------------------------------------
-            ;WITH Source ([Id], [Name]) AS
-            (
-                SELECT * FROM (VALUES
-                    (N'VIEW',      N'Xem'),
-                    (N'CREATE',    N'Tạo'),
-                    (N'UPDATE',    N'Sửa'),
-                    (N'DELETE',    N'Xóa'),
-                    (N'APPROVE',   N'Duyệt'),
-                    (N'IMPORT_CV', N'Import CV'),
-                    (N'AI_SCREEN', N'Sàng lọc AI'),
-                    (N'EXPORT',    N'Xuất DB')
-                ) AS V ([Id], [Name])
-            )
-            MERGE [Commands] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Name]) VALUES (S.[Id], S.[Name]);
+        ------------------------------------------------------------
+        -- AIScreeningResults  (insert nếu chưa có theo ApplicationId)
+        ------------------------------------------------------------
+        INSERT INTO "AIScreeningResults" (
+            "Id", "ApplicationId", "MatchingScore", "Ranking",
+            "KeywordsMatched", "KeywordsMissing", "ProcessingStatus",
+            "ScreenedAt", "ReviewedByHRId"
+        )
+        SELECT
+            a."Id",
+            a."Id",
+            CAST(60.0 + (a."Id" % 40) AS NUMERIC(5,2)),
+            (a."Id" % 3) + 1,
+            'C#, SQL, Git',
+            'Docker, Azure',
+            'Completed',
+            NOW(),
+            CASE WHEN a."Id" % 2 = 0 THEN 'U_HR_001' ELSE 'U_HR_002' END
+        FROM "Applications" a
+        WHERE NOT EXISTS (
+            SELECT 1 FROM "AIScreeningResults" ai WHERE ai."ApplicationId" = a."Id"
+        );
+        PERFORM setval(
+            pg_get_serial_sequence('"AIScreeningResults"', 'Id'),
+            (SELECT MAX("Id") FROM "AIScreeningResults")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT Functions
-            ------------------------------------------------------------
-            ;WITH Source ([Id], [Name], [Url], [Icon], [SortOrder], [ParentId]) AS
-            (
-                SELECT * FROM (VALUES
-                    (N'DASHBOARD',       N'Tổng quan',    N'/dashboard',                       N'fa fa-chart-line',      1, NULL),
-                    (N'RECRUITMENT',     N'Tuyển dụng',   N'/recruitment',                     N'fa fa-user-check',      2, NULL),
-                    (N'LMS',             N'Đào tạo',      N'/lms',                             N'fa fa-graduation-cap',  3, NULL),
-                    (N'TASK_MANAGEMENT', N'Thực tập',     N'/tasks',                           N'fa fa-tasks',           4, NULL),
-                    (N'REPORT',          N'Báo cáo',      N'/reports',                         N'fa fa-file-alt',        5, NULL),
-                    (N'CV_SCREENING',    N'Sàng lọc AI',  N'/recruitment/cv-screening',        N'fa fa-robot',           1, N'RECRUITMENT'),
-                    (N'JOB_DESCRIPTION', N'Mô tả JD',     N'/recruitment/job-descriptions',    N'fa fa-briefcase',       2, N'RECRUITMENT'),
-                    (N'COURSE',          N'Khóa học',     N'/lms/courses',                     N'fa fa-book',            1, N'LMS'),
-                    (N'INTERN_TASK',     N'Nhiệm vụ',     N'/tasks/intern-tasks',              N'fa fa-list-check',      1, N'TASK_MANAGEMENT'),
-                    (N'DAILY_REPORT',    N'Báo cáo ngày', N'/tasks/daily-reports',             N'fa fa-pen',             2, N'TASK_MANAGEMENT'),
-                    (N'TIMESHEET',       N'Chấm công',    N'/tasks/timesheets',                N'fa fa-clock',           3, N'TASK_MANAGEMENT')
-                ) AS V ([Id], [Name], [Url], [Icon], [SortOrder], [ParentId])
-            )
-            MERGE [Functions] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Name], [Url], [Icon], [SortOrder], [ParentId])
-                VALUES (S.[Id], S.[Name], S.[Url], S.[Icon], S.[SortOrder], S.[ParentId]);
+        ------------------------------------------------------------
+        -- Courses
+        ------------------------------------------------------------
+        INSERT INTO "Courses" ("Id", "Title", "Level", "CreatedByUserId", "IsPublished", "CreateDate") VALUES
+            (1,  'ASP.NET Core Web API', 'BEGINNER',     'U_MENTOR_001', TRUE, NOW()),
+            (2,  'EF Core & SQL',         'INTERMEDIATE', 'U_MENTOR_001', TRUE, NOW()),
+            (3,  'NLP CV Screening',      'INTERMEDIATE', 'U_MENTOR_002', TRUE, NOW()),
+            (4,  'Docker & AWS ECR',      'ADVANCED',     'U_MENTOR_001', TRUE, NOW()),
+            (5,  'Test k6 Performance',   'INTERMEDIATE', 'U_MENTOR_003', TRUE, NOW()),
+            (6,  'BA Thực chiến',         'BEGINNER',     'U_MENTOR_004', TRUE, NOW()),
+            (7,  'React Native Cơ bản',   'BEGINNER',     'U_MENTOR_001', TRUE, NOW()),
+            (8,  'PowerBI Dashboard',     'INTERMEDIATE', 'U_MENTOR_002', TRUE, NOW()),
+            (9,  'CI/CD Github Actions',  'ADVANCED',     'U_MENTOR_001', TRUE, NOW()),
+            (10, 'Agile Scrum 101',       'BEGINNER',     'U_MENTOR_004', TRUE, NOW())
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"Courses"', 'Id'),
+            (SELECT MAX("Id") FROM "Courses")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT CommandInFunctions
-            ------------------------------------------------------------
-            INSERT INTO [CommandInFunctions] ([CommandId], [FunctionId])
-            SELECT c.Id, f.Id
-            FROM [Commands] c CROSS JOIN [Functions] f
-            WHERE c.Id IN (N'VIEW', N'CREATE', N'UPDATE', N'DELETE', N'EXPORT')
-              AND NOT EXISTS (
-                    SELECT 1 FROM [CommandInFunctions] cif
-                    WHERE cif.[CommandId] = c.[Id] AND cif.[FunctionId] = f.[Id]);
+        ------------------------------------------------------------
+        -- CourseChapters
+        ------------------------------------------------------------
+        INSERT INTO "CourseChapters" ("Id", "CourseId", "Title", "SortOrder") VALUES
+            (1,1,'Chương 1',1),(2,2,'Chương 1',1),(3,3,'Chương 1',1),(4,4,'Chương 1',1),(5,5,'Chương 1',1),
+            (6,6,'Chương 1',1),(7,7,'Chương 1',1),(8,8,'Chương 1',1),(9,9,'Chương 1',1),(10,10,'Chương 1',1)
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"CourseChapters"', 'Id'),
+            (SELECT MAX("Id") FROM "CourseChapters")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT Permissions cho Admin
-            -- Dùng Id thực của role ADMIN từ bảng AppRoles (không hardcode)
-            ------------------------------------------------------------
-            INSERT INTO [Permissions] ([FunctionId], [RoleId], [CommandId])
-            SELECT cif.FunctionId, r.Id, cif.CommandId
-            FROM [CommandInFunctions] cif
-            CROSS JOIN [AppRoles] r
-            WHERE r.NormalizedName = N'ADMIN'
-              AND NOT EXISTS (
-                    SELECT 1 FROM [Permissions] p
-                    WHERE p.[FunctionId] = cif.[FunctionId]
-                      AND p.[RoleId]     = r.[Id]
-                      AND p.[CommandId]  = cif.[CommandId]);
+        ------------------------------------------------------------
+        -- Lessons
+        ------------------------------------------------------------
+        INSERT INTO "Lessons" ("Id","ChapterId","Title","LessonType","DurationMinutes","SortOrder","IsRequired") VALUES
+            (1, 1, 'REST API',        'VIDEO',    20, 1, TRUE), (2, 1,  'JWT Auth',     'DOCUMENT', 30, 2, TRUE),
+            (3, 2, 'Migration',       'VIDEO',    25, 1, TRUE), (4, 2,  'LINQ',         'VIDEO',    35, 2, TRUE),
+            (5, 3, 'TF-IDF',          'DOCUMENT', 40, 1, TRUE), (6, 3,  'Cosine Sim',  'VIDEO',    30, 2, TRUE),
+            (7, 4, 'Dockerfile',      'VIDEO',    20, 1, TRUE), (8, 4,  'AWS ECR',      'DOCUMENT', 25, 2, TRUE),
+            (9, 5, 'k6 Scripting',    'VIDEO',    45, 1, TRUE), (10, 5, 'VU config',    'DOCUMENT', 20, 2, TRUE),
+            (11,6, 'Viết Use Case',   'VIDEO',    30, 1, TRUE), (12, 6, 'Viết FRS',     'DOCUMENT', 40, 2, TRUE),
+            (13,7, 'React Hooks',     'VIDEO',    25, 1, TRUE), (14, 7, 'Redux',         'VIDEO',    35, 2, TRUE),
+            (15,8, 'DAX Filter',      'DOCUMENT', 30, 1, TRUE), (16, 8, 'Data Viz',     'VIDEO',    20, 2, TRUE),
+            (17,9, 'YAML file',       'VIDEO',    25, 1, TRUE), (18, 9, 'Runners',       'DOCUMENT', 30, 2, TRUE),
+            (19,10,'Sprint Plan',     'VIDEO',    20, 1, TRUE), (20,10, 'Retro',         'DOCUMENT', 25, 2, TRUE)
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"Lessons"', 'Id'),
+            (SELECT MAX("Id") FROM "Lessons")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT Permissions cho Mentor / Intern
-            -- Khớp với PermissionMiddleware:
-            --   /api/tasks        -> INTERN_TASK
-            --   /api/dailyreports -> DAILY_REPORT
-            ------------------------------------------------------------
-            ;WITH RolePermissionSource ([RoleName], [FunctionId], [CommandId]) AS
-            (
-                SELECT * FROM (VALUES
-                    (N'MENTOR', N'INTERN_TASK',  N'VIEW'),
-                    (N'MENTOR', N'INTERN_TASK',  N'CREATE'),
-                    (N'MENTOR', N'INTERN_TASK',  N'UPDATE'),
-                    (N'MENTOR', N'INTERN_TASK',  N'DELETE'),
-                    (N'MENTOR', N'DAILY_REPORT', N'VIEW'),
-                    (N'MENTOR', N'DAILY_REPORT', N'UPDATE'),
-                    (N'MENTOR', N'JOB_DESCRIPTION', N'VIEW'),
-                    (N'MENTOR', N'JOB_DESCRIPTION', N'CREATE'),
-                    (N'MENTOR', N'JOB_DESCRIPTION', N'UPDATE'),
-                    (N'MENTOR', N'CV_SCREENING',    N'VIEW'),
-                    (N'MENTOR', N'CV_SCREENING',    N'CREATE'),
-                    (N'HR',     N'JOB_DESCRIPTION', N'VIEW'),
-                    (N'HR',     N'JOB_DESCRIPTION', N'CREATE'),
-                    (N'HR',     N'JOB_DESCRIPTION', N'UPDATE'),
-                    (N'HR',     N'JOB_DESCRIPTION', N'DELETE'),
-                    (N'HR',     N'CV_SCREENING',    N'VIEW'),
-                    (N'HR',     N'CV_SCREENING',    N'CREATE'),
-                    (N'HR',     N'CV_SCREENING',    N'UPDATE'),
-                    (N'HR',     N'CV_SCREENING',    N'DELETE'),
-                    (N'INTERN', N'INTERN_TASK',  N'VIEW'),
-                    (N'INTERN', N'INTERN_TASK',  N'UPDATE'),
-                    (N'INTERN', N'DAILY_REPORT', N'VIEW'),
-                    (N'INTERN', N'DAILY_REPORT', N'CREATE')
-                ) AS V ([RoleName], [FunctionId], [CommandId])
-            )
-            INSERT INTO [Permissions] ([FunctionId], [RoleId], [CommandId])
-            SELECT rps.FunctionId, r.Id, rps.CommandId
-            FROM RolePermissionSource rps
-            INNER JOIN [AppRoles] r ON r.NormalizedName = rps.RoleName
-            WHERE NOT EXISTS (
-                SELECT 1 FROM [Permissions] p
-                WHERE p.[FunctionId] = rps.[FunctionId]
-                  AND p.[RoleId]     = r.[Id]
-                  AND p.[CommandId]  = rps.[CommandId]);
+        ------------------------------------------------------------
+        -- Enrollments  (composite PK: InternUserId + CourseId)
+        ------------------------------------------------------------
+        INSERT INTO "Enrollments" ("InternUserId", "CourseId", "EnrollDate", "CompletionPercent") VALUES
+            ('U_INTERN_001',1, NOW(),100),('U_INTERN_001',4, NOW(),100),('U_INTERN_002',2, NOW(),50),
+            ('U_INTERN_003',3, NOW(),80), ('U_INTERN_004',1, NOW(),10), ('U_INTERN_006',3, NOW(),95),
+            ('U_INTERN_007',5, NOW(),100),('U_INTERN_008',6, NOW(),90), ('U_INTERN_009',1, NOW(),50),
+            ('U_INTERN_010',6, NOW(),80), ('U_INTERN_011',7, NOW(),30), ('U_INTERN_012',8, NOW(),60),
+            ('U_INTERN_013',9, NOW(),100),('U_INTERN_014',10,NOW(),100),('U_INTERN_015',10,NOW(),0),
+            ('U_INTERN_016',1, NOW(),10), ('U_INTERN_017',2, NOW(),25), ('U_INTERN_018',3, NOW(),10),
+            ('U_INTERN_019',5, NOW(),65), ('U_INTERN_020',6, NOW(),45), ('U_INTERN_021',7, NOW(),85),
+            ('U_INTERN_022',8, NOW(),30), ('U_INTERN_023',4, NOW(),100),('U_INTERN_024',9, NOW(),40),
+            ('U_INTERN_025',10,NOW(),100),('U_INTERN_026',1, NOW(),70), ('U_INTERN_027',1, NOW(),0),
+            ('U_INTERN_028',5, NOW(),20), ('U_INTERN_029',4, NOW(),15), ('U_INTERN_030',6, NOW(),100)
+        ON CONFLICT ("InternUserId", "CourseId") DO UPDATE SET
+            "CompletionPercent" = EXCLUDED."CompletionPercent";
 
-            ------------------------------------------------------------
-            -- UPSERT Universities
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [Universities] ON;
-            ;WITH Source ([Id], [Name], [City]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,  N'Đại học Bách khoa Hà Nội',      N'Hà Nội'),
-                    (2,  N'Đại học Công nghệ - ĐHQGHN',    N'Hà Nội'),
-                    (3,  N'Học viện Công nghệ BCVT',        N'Hà Nội'),
-                    (4,  N'Đại học FPT',                    N'Hà Nội'),
-                    (5,  N'Đại học KHTN - ĐHQG TP.HCM',    N'TP.HCM'),
-                    (6,  N'Đại học Duy Tân',                N'Đà Nẵng'),
-                    (7,  N'Đại học Thương Mại (TMU)',       N'Hà Nội'),
-                    (8,  N'Đại học Kinh tế Quốc dân',      N'Hà Nội'),
-                    (9,  N'Đại học Giao thông Vận tải',    N'Hà Nội'),
-                    (10, N'Học viện Ngân hàng',             N'Hà Nội'),
-                    (11, N'Học viện Kỹ thuật Mật mã',      N'Hà Nội'),
-                    (12, N'Đại học Công nghiệp Hà Nội',    N'Hà Nội'),
-                    (13, N'Đại học Sư phạm Kỹ thuật',      N'TP.HCM'),
-                    (14, N'Đại học Bách khoa TP.HCM',      N'TP.HCM'),
-                    (15, N'Đại học Tôn Đức Thắng',         N'TP.HCM')
-                ) AS V ([Id], [Name], [City])
-            )
-            MERGE [Universities] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Name], [City]) VALUES (S.[Id], S.[Name], S.[City]);
-            SET IDENTITY_INSERT [Universities] OFF;
+        ------------------------------------------------------------
+        -- InternshipPeriods
+        ------------------------------------------------------------
+        INSERT INTO "InternshipPeriods" ("Id", "Name", "StartDate", "EndDate", "IsActive") VALUES
+            (1, 'Kỳ thực tập Spring 2026', NOW() - INTERVAL '30 days', NOW() + INTERVAL '60 days', TRUE)
+        ON CONFLICT ("Id") DO NOTHING;
+        PERFORM setval(
+            pg_get_serial_sequence('"InternshipPeriods"', 'Id'),
+            (SELECT MAX("Id") FROM "InternshipPeriods")
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT AppUsers (bulk — không có password hash thực)
-            --
-            -- ⚠️ 4 user đã được C# tạo ở bước trên (U_ADMIN_001, U_HR_001,
-            --    U_MENTOR_001, U_INTERN_001) với password hash đúng.
-            --    MERGE dùng ON T.[Id] = S.[Id] → những user đó đã tồn tại
-            --    → chỉ bị UPDATE các trường phi-security, KHÔNG đụng PasswordHash.
-            --
-            --    Các user còn lại (U_HR_002, U_MENTOR_002..4, U_INTERN_002..030)
-            --    được INSERT mới với PasswordHash = N'HASH' (dữ liệu demo).
-            ------------------------------------------------------------
-            ;WITH Source ([Id], [FirstName], [LastName], [IsActive], [CreateDate],
-                          [UserName], [NormalizedUserName], [Email], [NormalizedEmail],
-                          [EmailConfirmed], [PasswordHash], [SecurityStamp], [ConcurrencyStamp],
-                          [PhoneNumberConfirmed], [TwoFactorEnabled], [LockoutEnabled],
-                          [AccessFailedCount], [UniversityId], [GPA]) AS
-            (
-                SELECT * FROM (VALUES
-                    -- ── Admin ──────────────────────────────────────────────────────────────
-                    (N'U_ADMIN_001',  N'Admin',  N'System',        1, GETDATE(), N'admin',         N'ADMIN',         N'admin@deha.vn',    N'ADMIN@DEHA.VN',    1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    -- ── HR ─────────────────────────────────────────────────────────────────
-                    (N'U_HR_001',     N'Minh',   N'Nguyễn HR',     1, GETDATE(), N'hr.minh',       N'HR.MINH',       N'hr.minh@deha.vn',  N'HR.MINH@DEHA.VN',  1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    (N'U_HR_002',     N'Lan',    N'Phạm HR',       1, GETDATE(), N'hr.lan',        N'HR.LAN',        N'hr.lan@deha.vn',   N'HR.LAN@DEHA.VN',   1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    -- ── Mentor ─────────────────────────────────────────────────────────────
-                    (N'U_MENTOR_001', N'Hoàng',  N'Backend',       1, GETDATE(), N'mentor.hoang',  N'MENTOR.HOANG',  N'hoang@deha.vn',    N'HOANG@DEHA.VN',    1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    (N'U_MENTOR_002', N'Anh',    N'AI_NLP',        1, GETDATE(), N'mentor.anh',    N'MENTOR.ANH',    N'anh@deha.vn',      N'ANH@DEHA.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    (N'U_MENTOR_003', N'Đức',    N'QA_QC',         1, GETDATE(), N'mentor.duc',    N'MENTOR.DUC',    N'duc@deha.vn',      N'DUC@DEHA.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    (N'U_MENTOR_004', N'Hương',  N'BA_Lead',       1, GETDATE(), N'mentor.huong',  N'MENTOR.HUONG',  N'huong@deha.vn',    N'HUONG@DEHA.VN',    1, N'HASH', NEWID(), NEWID(), 1,0,1,0, NULL, NULL),
-                    -- ── Intern ─────────────────────────────────────────────────────────────
-                    (N'U_INTERN_001', N'Thanh',  N'Trần Phương',   1, GETDATE(), N'intern.thanh',  N'INTERN.THANH',  N'thanh@sv.vn',      N'THANH@SV.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 7,  3.85),
-                    (N'U_INTERN_002', N'Nam',    N'Nguyễn Hoài',   1, GETDATE(), N'intern.nam',    N'INTERN.NAM',    N'nam@sv.vn',        N'NAM@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 2,  3.20),
-                    (N'U_INTERN_003', N'Linh',   N'Vũ Khánh',      1, GETDATE(), N'intern.linh',   N'INTERN.LINH',   N'linh@sv.vn',       N'LINH@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 3,  3.72),
-                    (N'U_INTERN_004', N'Dũng',   N'Phạm Minh',     1, GETDATE(), N'intern.dung',   N'INTERN.DUNG',   N'dung@sv.vn',       N'DUNG@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 4,  2.95),
-                    (N'U_INTERN_005', N'Hà',     N'Đỗ Ngọc',       1, GETDATE(), N'intern.ha',     N'INTERN.HA',     N'ha@sv.vn',         N'HA@SV.VN',         1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 5,  3.10),
-                    (N'U_INTERN_006', N'Quân',   N'Bùi Anh',       1, GETDATE(), N'intern.quan',   N'INTERN.QUAN',   N'quan@sv.vn',       N'QUAN@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 6,  3.60),
-                    (N'U_INTERN_007', N'Hải',    N'Trần Ngọc',     1, GETDATE(), N'intern.hai',    N'INTERN.HAI',    N'hai@sv.vn',        N'HAI@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 7,  3.50),
-                    (N'U_INTERN_008', N'Thảo',   N'Lê Phương',     1, GETDATE(), N'intern.thao',   N'INTERN.THAO',   N'thao@sv.vn',       N'THAO@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 8,  3.65),
-                    (N'U_INTERN_009', N'Phong',  N'Nguyễn Đình',   1, GETDATE(), N'intern.phong',  N'INTERN.PHONG',  N'phong@sv.vn',      N'PHONG@SV.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 1,  3.15),
-                    (N'U_INTERN_010', N'Yến',    N'Hoàng Hải',     1, GETDATE(), N'intern.yen',    N'INTERN.YEN',    N'yen@sv.vn',        N'YEN@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 7,  3.80),
-                    (N'U_INTERN_011', N'Cường',  N'Vũ Quốc',       1, GETDATE(), N'intern.cuong',  N'INTERN.CUONG',  N'cuong@sv.vn',      N'CUONG@SV.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 9,  3.00),
-                    (N'U_INTERN_012', N'Mai',    N'Đặng Phương',   1, GETDATE(), N'intern.mai',    N'INTERN.MAI',    N'mai@sv.vn',        N'MAI@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 10, 3.40),
-                    (N'U_INTERN_013', N'Tuấn',   N'Đinh Khắc',     1, GETDATE(), N'intern.tuan',   N'INTERN.TUAN',   N'tuan@sv.vn',       N'TUAN@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 11, 2.80),
-                    (N'U_INTERN_014', N'Trang',  N'Lý Thu',        1, GETDATE(), N'intern.trang',  N'INTERN.TRANG',  N'trang@sv.vn',      N'TRANG@SV.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 12, 3.55),
-                    (N'U_INTERN_015', N'Khoa',   N'Hồ Đăng',       1, GETDATE(), N'intern.khoa',   N'INTERN.KHOA',   N'khoa@sv.vn',       N'KHOA@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 13, 3.70),
-                    (N'U_INTERN_016', N'Bình',   N'Trương Thanh',  1, GETDATE(), N'intern.binh',   N'INTERN.BINH',   N'binh@sv.vn',       N'BINH@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 14, 3.10),
-                    (N'U_INTERN_017', N'Hoa',    N'Ngô Quý',       1, GETDATE(), N'intern.hoa',    N'INTERN.HOA',    N'hoa@sv.vn',        N'HOA@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 15, 3.25),
-                    (N'U_INTERN_018', N'Việt',   N'Bùi Quang',     1, GETDATE(), N'intern.viet',   N'INTERN.VIET',   N'viet@sv.vn',       N'VIET@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 1,  2.90),
-                    (N'U_INTERN_019', N'Giang',  N'Phạm Hương',    1, GETDATE(), N'intern.giang',  N'INTERN.GIANG',  N'giang@sv.vn',      N'GIANG@SV.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 2,  3.65),
-                    (N'U_INTERN_020', N'Đạt',    N'Nguyễn Thành',  1, GETDATE(), N'intern.dat',    N'INTERN.DAT',    N'dat@sv.vn',        N'DAT@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 3,  3.80),
-                    (N'U_INTERN_021', N'My',     N'Trần Trà',      1, GETDATE(), N'intern.my',     N'INTERN.MY',     N'my@sv.vn',         N'MY@SV.VN',         1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 4,  3.40),
-                    (N'U_INTERN_022', N'Long',   N'Hoàng Phi',     1, GETDATE(), N'intern.long',   N'INTERN.LONG',   N'long@sv.vn',       N'LONG@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 5,  2.85),
-                    (N'U_INTERN_023', N'Hân',    N'Đỗ Gia',        1, GETDATE(), N'intern.han',    N'INTERN.HAN',    N'han@sv.vn',        N'HAN@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 6,  3.90),
-                    (N'U_INTERN_024', N'Sơn',    N'Lê Tùng',       1, GETDATE(), N'intern.son',    N'INTERN.SON',    N'son@sv.vn',        N'SON@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 7,  3.05),
-                    (N'U_INTERN_025', N'An',     N'Vũ Bình',       1, GETDATE(), N'intern.an',     N'INTERN.AN',     N'an@sv.vn',         N'AN@SV.VN',         1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 8,  3.35),
-                    (N'U_INTERN_026', N'Phúc',   N'Nguyễn Hồng',  1, GETDATE(), N'intern.phuc',   N'INTERN.PHUC',   N'phuc@sv.vn',       N'PHUC@SV.VN',       1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 9,  3.15),
-                    (N'U_INTERN_027', N'Tâm',    N'Trần Minh',     1, GETDATE(), N'intern.tam',    N'INTERN.TAM',    N'tam@sv.vn',        N'TAM@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 10, 3.45),
-                    (N'U_INTERN_028', N'Khánh',  N'Lý Quốc',      1, GETDATE(), N'intern.khanh',  N'INTERN.KHANH',  N'khanh@sv.vn',      N'KHANH@SV.VN',      1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 11, 2.75),
-                    (N'U_INTERN_029', N'Nhi',    N'Đặng Yến',      1, GETDATE(), N'intern.nhi',    N'INTERN.NHI',    N'nhi@sv.vn',        N'NHI@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 12, 3.60),
-                    (N'U_INTERN_030', N'Bảo',    N'Phạm Gia',      1, GETDATE(), N'intern.bao',    N'INTERN.BAO',    N'bao@sv.vn',        N'BAO@SV.VN',        1, N'HASH', NEWID(), NEWID(), 1,0,1,0, 13, 3.85)
-                ) AS V ([Id], [FirstName], [LastName], [IsActive], [CreateDate],
-                         [UserName], [NormalizedUserName], [Email], [NormalizedEmail],
-                         [EmailConfirmed], [PasswordHash], [SecurityStamp], [ConcurrencyStamp],
-                         [PhoneNumberConfirmed], [TwoFactorEnabled], [LockoutEnabled],
-                         [AccessFailedCount], [UniversityId], [GPA])
-            )
-            MERGE [AppUsers] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN MATCHED THEN
-                -- Chỉ UPDATE các trường phi-security. KHÔNG đụng PasswordHash của 4 user thực.
-                UPDATE SET
-                    T.[FirstName]          = S.[FirstName],
-                    T.[LastName]           = S.[LastName],
-                    T.[IsActive]           = S.[IsActive],
-                    T.[UniversityId]       = S.[UniversityId],
-                    T.[GPA]                = S.[GPA]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [FirstName], [LastName], [IsActive], [CreateDate],
-                        [UserName], [NormalizedUserName], [Email], [NormalizedEmail],
-                        [EmailConfirmed], [PasswordHash], [SecurityStamp], [ConcurrencyStamp],
-                        [PhoneNumberConfirmed], [TwoFactorEnabled], [LockoutEnabled],
-                        [AccessFailedCount], [UniversityId], [GPA])
-                VALUES (S.[Id], S.[FirstName], S.[LastName], S.[IsActive], S.[CreateDate],
-                        S.[UserName], S.[NormalizedUserName], S.[Email], S.[NormalizedEmail],
-                        S.[EmailConfirmed], S.[PasswordHash], S.[SecurityStamp], S.[ConcurrencyStamp],
-                        S.[PhoneNumberConfirmed], S.[TwoFactorEnabled], S.[LockoutEnabled],
-                        S.[AccessFailedCount], S.[UniversityId], S.[GPA]);
+        ------------------------------------------------------------
+        -- InternAssignments
+        -- InternAssignments có auto-generated Id (int PK).
+        -- Unique constraint trên (InternUserId, PeriodId) → dùng WHERE NOT EXISTS
+        -- để an toàn kể cả khi chưa có unique index.
+        ------------------------------------------------------------
+        INSERT INTO "InternAssignments" ("InternUserId", "MentorUserId", "PeriodId", "AssignedDate")
+        SELECT
+            io.intern_id,
+            CASE (io.rn % 4)
+                WHEN 1 THEN 'U_MENTOR_001'
+                WHEN 2 THEN 'U_MENTOR_002'
+                WHEN 3 THEN 'U_MENTOR_003'
+                ELSE        'U_MENTOR_004'
+            END,
+            ip."Id",
+            NOW()
+        FROM (
+            SELECT ROW_NUMBER() OVER (ORDER BY u."Id") AS rn, u."Id" AS intern_id
+            FROM "AppUsers" u
+            WHERE u."Id" LIKE 'U_INTERN%'
+        ) io
+        CROSS JOIN "InternshipPeriods" ip
+        WHERE ip."Name" = 'Kỳ thực tập Spring 2026'
+          AND NOT EXISTS (
+              SELECT 1 FROM "InternAssignments" ia
+              WHERE ia."InternUserId" = io.intern_id AND ia."PeriodId" = ip."Id"
+          );
 
-            ------------------------------------------------------------
-            -- UPSERT UserRoles
-            -- Mapping theo prefix Id của AppUsers → NormalizedName của AppRoles
-            -- NOT EXISTS đảm bảo không insert trùng (kể cả 4 user đã gán qua C#)
-            ------------------------------------------------------------
-            ;WITH UserRoleMap AS
-            (
-                SELECT u.Id AS UserId, r.Id AS RoleId
-                FROM [AppUsers] u
-                INNER JOIN [AppRoles] r ON r.[NormalizedName] =
-                    CASE
-                        WHEN u.Id LIKE N'U_ADMIN%'  THEN N'ADMIN'
-                        WHEN u.Id LIKE N'U_HR%'     THEN N'HR'
-                        WHEN u.Id LIKE N'U_MENTOR%' THEN N'MENTOR'
-                        WHEN u.Id LIKE N'U_INTERN%' THEN N'INTERN'
-                    END
-                WHERE u.Id LIKE N'U_%'
-            )
-            INSERT INTO [UserRoles] ([UserId], [RoleId])
-            SELECT m.UserId, m.RoleId
-            FROM UserRoleMap m
-            WHERE NOT EXISTS (
-                SELECT 1 FROM [UserRoles] ur
-                WHERE ur.[UserId] = m.[UserId] AND ur.[RoleId] = m.[RoleId]);
+        ------------------------------------------------------------
+        -- TaskItems
+        -- Dùng WHERE NOT EXISTS (AssignmentId + Title) để idempotent
+        -- mà không cần unique index trên 2 cột đó.
+        ------------------------------------------------------------
+        INSERT INTO "TaskItems" (
+            "Title", "Description", "AssignmentId",
+            "Priority", "Status", "Deadline",
+            "EstimatedHours", "CreateDate", "CreatedByUserId"
+        )
+        SELECT
+            ts.title, ts.description, ia."Id",
+            ts.priority, ts.status,
+            NOW() + (ts.deadline_days || ' days')::INTERVAL,
+            ts.hours, NOW(), ts.creator
+        FROM (VALUES
+            (1, 'API JWT',                    'Login endpoint',       'HIGH',   'DONE',         2,  10, 'U_MENTOR_001'),
+            (1, 'Docker AWS',                 'Push image ECR',       'HIGH',   'DONE',         3,  12, 'U_MENTOR_001'),
+            (2, 'TF-IDF CV',                  'Extract skills',       'HIGH',   'IN_PROGRESS',  5,  16, 'U_MENTOR_002'),
+            (3, 'k6 Load Test',               '100 VUs login',        'MEDIUM', 'DONE',         1,   8, 'U_MENTOR_003'),
+            (4, 'Use Case Quản lý thực đơn',  'Vẽ bằng Draw.io',     'HIGH',   'DONE',         4,  10, 'U_MENTOR_004'),
+            (5, 'UI 44px touch',              'Fix mobile UI',        'MEDIUM', 'TODO',         6,   6, 'U_MENTOR_001'),
+            (6, 'Migration DB',               'LMS module',           'HIGH',   'IN_PROGRESS',  2,  14, 'U_MENTOR_001'),
+            (7, 'Cosine Sim',                 'Matching AI',          'HIGH',   'TODO',         8,  20, 'U_MENTOR_002'),
+            (8, 'Test API',                   'Postman runner',       'LOW',    'DONE',         1,   4, 'U_MENTOR_003'),
+            (9, 'FRS Document',               'Phần Đăng nhập',       'HIGH',   'IN_PROGRESS',  3,  16, 'U_MENTOR_004'),
+            (10,'Fix Bug #101',               'Fix crash login',      'HIGH',   'DONE',         2,   4, 'U_MENTOR_001'),
+            (11,'Data Crawl',                 'Crawl JDs',            'MEDIUM', 'IN_PROGRESS',  4,  10, 'U_MENTOR_002'),
+            (12,'Automation UI',              'Selenium script',      'HIGH',   'TODO',         6,  12, 'U_MENTOR_003'),
+            (13,'BPMN Quy trình',             'Tuyển dụng flow',      'MEDIUM', 'DONE',         1,   8, 'U_MENTOR_004'),
+            (14,'Redis Cache',                'Cache API',            'HIGH',   'TODO',         5,  12, 'U_MENTOR_001'),
+            (15,'Log ELK',                    'Config Kibana',        'MEDIUM', 'IN_PROGRESS',  7,  16, 'U_MENTOR_001'),
+            (16,'Model Train',                'Train ML.NET',         'HIGH',   'TODO',        10,  24, 'U_MENTOR_002'),
+            (17,'Jmeter Test',                'Load test LMS',        'MEDIUM', 'DONE',        -1,   8, 'U_MENTOR_003'),
+            (18,'UML Class',                  'Class Diagram',        'LOW',    'IN_PROGRESS',  2,   6, 'U_MENTOR_004'),
+            (19,'React Router',               'Setup routes',         'HIGH',   'DONE',         1,   4, 'U_MENTOR_001'),
+            (20,'Clean Data',                 'Remove stopwords',     'MEDIUM', 'TODO',         3,   8, 'U_MENTOR_002'),
+            (21,'Bug report',                 'Log Jira',             'LOW',    'DONE',         0,   2, 'U_MENTOR_003'),
+            (22,'Wireframe',                  'Dashboard UI',         'HIGH',   'IN_PROGRESS',  5,  12, 'U_MENTOR_004'),
+            (23,'CI/CD Pipeline',             'Github Actions',       'HIGH',   'TODO',         7,  16, 'U_MENTOR_001'),
+            (24,'Chatbot AI',                 'Dialogflow',           'MEDIUM', 'IN_PROGRESS',  9,  20, 'U_MENTOR_002'),
+            (25,'Pen Test',                   'OWASP Top 10',         'HIGH',   'TODO',        12,  24, 'U_MENTOR_003'),
+            (26,'User Story',                 'Sprint 1',             'MEDIUM', 'DONE',        -2,   8, 'U_MENTOR_004'),
+            (27,'Entity Rel',                 'ERD Diagram',          'HIGH',   'IN_PROGRESS',  1,   6, 'U_MENTOR_001'),
+            (28,'AWS S3',                     'Upload CV API',        'MEDIUM', 'TODO',         4,  10, 'U_MENTOR_001'),
+            (29,'Review Doc',                 'Peer review',          'LOW',    'DONE',        -1,   4, 'U_MENTOR_004')
+        ) AS ts(rn, title, description, priority, status, deadline_days, hours, creator)
+        INNER JOIN (
+            SELECT ROW_NUMBER() OVER (ORDER BY u."Id") AS rn, u."Id" AS intern_id
+            FROM "AppUsers" u
+            WHERE u."Id" LIKE 'U_INTERN%'
+        ) io ON io.rn = ts.rn
+        INNER JOIN "InternAssignments" ia
+            ON ia."InternUserId" = io.intern_id
+           AND ia."PeriodId" = (
+               SELECT "Id" FROM "InternshipPeriods" WHERE "Name" = 'Kỳ thực tập Spring 2026' LIMIT 1
+           )
+        WHERE NOT EXISTS (
+            SELECT 1 FROM "TaskItems" t
+            WHERE t."AssignmentId" = ia."Id" AND t."Title" = ts.title
+        );
 
-            ------------------------------------------------------------
-            -- UPSERT JobPositions
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [JobPositions] ON;
-            ;WITH Source ([Id], [Title], [Description], [IsActive], [CreateDate]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,  N'.NET Backend',     N'API, EF Core',             1, GETDATE()),
-                    (2,  N'Frontend',         N'Web MVC, React',           1, GETDATE()),
-                    (3,  N'AI/NLP',           N'Xử lý văn bản, TF-IDF',   1, GETDATE()),
-                    (4,  N'QA/QC',            N'Test Case, k6',            1, GETDATE()),
-                    (5,  N'Business Analyst', N'FRS, Use Case',            1, GETDATE()),
-                    (6,  N'Mobile App',       N'React Native, Flutter',    1, GETDATE()),
-                    (7,  N'Data Analyst',     N'SQL, PowerBI',             1, GETDATE()),
-                    (8,  N'DevOps',           N'CI/CD, Docker, AWS',       1, GETDATE()),
-                    (9,  N'UI/UX Design',     N'Figma, Prototype',         1, GETDATE()),
-                    (10, N'NodeJS Backend',   N'Express, MongoDB',         1, GETDATE())
-                ) AS V ([Id], [Title], [Description], [IsActive], [CreateDate])
-            )
-            MERGE [JobPositions] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Title], [Description], [IsActive], [CreateDate])
-                VALUES (S.[Id], S.[Title], S.[Description], S.[IsActive], S.[CreateDate]);
-            SET IDENTITY_INSERT [JobPositions] OFF;
+        ------------------------------------------------------------
+        -- DailyReports
+        -- DELETE seed cũ (theo content) rồi INSERT lại → luôn fresh
+        ------------------------------------------------------------
+        DELETE FROM "DailyReports"
+        WHERE "ReportDate"::DATE = v_report_date
+          AND "InternUserId" LIKE 'U_INTERN_%'
+          AND "Content" IN (
+            'Đẩy xong Docker image lên ECR', 'Migration DB bị lỗi FK',
+            'Bóc tách được 50 từ khóa CV',   'Làm mockup Figma',
+            'Học OWASP',                      'Viết User Story',
+            'Chạy script k6 pass 100 VUs',    'Vẽ xong Use Case Quản lý thực đơn',
+            'Test API login bằng Postman',     'Vẽ ERD',
+            'Code React component',            'Crawl data JD',
+            'Viết script Selenium',            'Vẽ BPMN',
+            'Đọc tài liệu Agile',             'Setup S3 bucket',
+            'Đọc tài liệu',                   'Tìm hiểu Redis',
+            'Setup ELK',                       'Tìm hiểu ML.NET',
+            'Chạy Jmeter',                    'Vẽ Class Diagram',
+            'Setup xong Github Actions',       'Code React Router',
+            'Clear stopwords',                 'Log bug lên Jira',
+            'Làm Wireframe',                   'Build pipeline',
+            'Nghiên cứu Dialogflow',           'Peer review FRS của team'
+          );
 
-            ------------------------------------------------------------
-            -- UPSERT JobDescriptions
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [JobDescriptions] ON;
-            ;WITH Source ([Id], [JobPositionId], [Title], [DetailContent], [RequiredSkills], [MinGPA], [CreatedByUserId], [Status], [CreateDate], [DeadlineDate]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,  1, N'JD .NET Backend - Đợt 1',  N'Phát triển API bằng ASP.NET Core.',            N'C#, ASP.NET Core, SQL Server', 3.0, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (2,  2, N'JD Frontend Web - Đợt 1',  N'Thiết kế giao diện trên nền tảng Web.',        N'HTML, CSS, JS, React',         2.8, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (3,  3, N'JD AI/NLP - Đợt 1',        N'Nghiên cứu mô hình bóc tách dữ liệu văn bản.',N'Python, ML.NET, NLP',          3.2, N'U_HR_002', N'OPEN',   GETDATE(), DATEADD(DAY,  45, GETDATE())),
-                    (4,  4, N'JD Tester/QA - Đợt 1',     N'Viết kịch bản test, chạy script hiệu năng.',  N'Manual Test, API Test, k6',    2.8, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (5,  5, N'JD BA Intern - Đợt 1',     N'Lấy yêu cầu khách hàng, viết FRS.',           N'UML, FRS, Use Case',           3.0, N'U_HR_002', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (6,  6, N'JD Mobile React Native',    N'Build ứng dụng mobile đa nền tảng.',          N'React Native, JS/TS',          2.8, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (7,  7, N'JD Data Analyst Intern',    N'Xử lý số liệu, làm Dashboard thống kê.',      N'SQL, Python, PowerBI',         3.2, N'U_HR_002', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (8,  8, N'JD DevOps Intern',          N'Cấu hình môi trường, đẩy Docker lên AWS.',    N'Linux, Docker, AWS ECR',       3.0, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (9,  9, N'JD UI/UX Intern',           N'Làm Wireframe, Prototype cho module LMS.',    N'Figma, UI/UX Principles',      2.8, N'U_HR_002', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (10,10, N'JD NodeJS Backend',         N'Phát triển API bằng NodeJS.',                 N'NodeJS, Express, MongoDB',     3.0, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (11, 1, N'JD .NET Backend - Đợt 2',  N'Xây dựng Microservices với C#.',              N'C#, Microservices, Docker',    3.2, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (12, 5, N'JD BA Intern - Đợt 2',     N'Tối ưu quy trình tuyển dụng thông minh.',    N'BPMN, SQL Cơ bản, FRS',        3.0, N'U_HR_002', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (13, 4, N'JD Automation QA',          N'Làm Automation test bằng C# và Selenium.',   N'Selenium, k6, C#',             3.0, N'U_HR_001', N'OPEN',   GETDATE(), DATEADD(DAY,  30, GETDATE())),
-                    (14, 2, N'JD Frontend VueJS',         N'Dùng VueJS làm giao diện Dashboard.',        N'VueJS, TailwindCSS',           2.8, N'U_HR_001', N'CLOSED', GETDATE(), DATEADD(DAY,  -5, GETDATE())),
-                    (15, 8, N'JD Cloud/DevOps',           N'Triển khai dự án lên nền tảng Azure.',       N'Azure, Kubernetes',            3.5, N'U_HR_002', N'CLOSED', GETDATE(), DATEADD(DAY,  -5, GETDATE()))
-                ) AS V ([Id], [JobPositionId], [Title], [DetailContent], [RequiredSkills], [MinGPA], [CreatedByUserId], [Status], [CreateDate], [DeadlineDate])
-            )
-            MERGE [JobDescriptions] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [JobPositionId], [Title], [DetailContent], [RequiredSkills], [MinGPA], [CreatedByUserId], [Status], [CreateDate], [DeadlineDate])
-                VALUES (S.[Id], S.[JobPositionId], S.[Title], S.[DetailContent], S.[RequiredSkills], S.[MinGPA], S.[CreatedByUserId], S.[Status], S.[CreateDate], S.[DeadlineDate]);
-            SET IDENTITY_INSERT [JobDescriptions] OFF;
+        INSERT INTO "DailyReports" (
+            "InternUserId", "ReportDate", "Content",
+            "PlannedTomorrow", "MentorFeedback", "ReviewedByMentorId"
+        ) VALUES
+            ('U_INTERN_001', v_report_date, 'Đẩy xong Docker image lên ECR',      'Tích hợp ECS',     'Tốt, nhớ check IAM policy',    'U_MENTOR_001'),
+            ('U_INTERN_002', v_report_date, 'Migration DB bị lỗi FK',              'Fix lỗi cascade',  'Xem lại ERD',                  'U_MENTOR_001'),
+            ('U_INTERN_003', v_report_date, 'Bóc tách được 50 từ khóa CV',         'Tính TF-IDF',      'Cần lọc thêm stopwords',       'U_MENTOR_002'),
+            ('U_INTERN_004', v_report_date, 'Làm mockup Figma',                    'Xin review',       'Cần chú ý 44px touch target',  'U_MENTOR_004'),
+            ('U_INTERN_005', v_report_date, 'Học OWASP',                           'Test SQLi',        'Ok',                           'U_MENTOR_003'),
+            ('U_INTERN_006', v_report_date, 'Viết User Story',                     'Estimation',       'Ok',                           'U_MENTOR_004'),
+            ('U_INTERN_007', v_report_date, 'Chạy script k6 pass 100 VUs',         'Report kết quả',   'Kiểm tra lại RAM usage',       'U_MENTOR_003'),
+            ('U_INTERN_008', v_report_date, 'Vẽ xong Use Case Quản lý thực đơn',  'Viết FRS',         'Logic đúng chuẩn',             'U_MENTOR_004'),
+            ('U_INTERN_009', v_report_date, 'Test API login bằng Postman',         'Test API Register','Ok',                           'U_MENTOR_003'),
+            ('U_INTERN_010', v_report_date, 'Vẽ ERD',                              'Migration',        'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_011', v_report_date, 'Code React component',                'Ghép API',         'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_012', v_report_date, 'Crawl data JD',                       'Clean data',       'Ok',                           'U_MENTOR_002'),
+            ('U_INTERN_013', v_report_date, 'Viết script Selenium',                'Chạy thử',         'Ok',                           'U_MENTOR_003'),
+            ('U_INTERN_014', v_report_date, 'Vẽ BPMN',                             'Review',           'Ok',                           'U_MENTOR_004'),
+            ('U_INTERN_015', v_report_date, 'Đọc tài liệu Agile',                 'Học Jira',         'Tốt',                          'U_MENTOR_004'),
+            ('U_INTERN_016', v_report_date, 'Setup S3 bucket',                     'Code API',         'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_017', v_report_date, 'Đọc tài liệu',                        'Peer review',      'Ok',                           'U_MENTOR_004'),
+            ('U_INTERN_018', v_report_date, 'Tìm hiểu Redis',                      'Code demo',        'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_019', v_report_date, 'Setup ELK',                           'Config Logstash',  'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_020', v_report_date, 'Tìm hiểu ML.NET',                    'Train model',      'Ok',                           'U_MENTOR_002'),
+            ('U_INTERN_021', v_report_date, 'Chạy Jmeter',                         'Đọc report',       'Ok',                           'U_MENTOR_003'),
+            ('U_INTERN_022', v_report_date, 'Vẽ Class Diagram',                    'Code entity',      'Ok',                           'U_MENTOR_004'),
+            ('U_INTERN_023', v_report_date, 'Setup xong Github Actions',           'Test push code',   'Tốt',                          'U_MENTOR_001'),
+            ('U_INTERN_024', v_report_date, 'Code React Router',                   'Code UI',          'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_025', v_report_date, 'Clear stopwords',                     'NLP',              'Ok',                           'U_MENTOR_002'),
+            ('U_INTERN_026', v_report_date, 'Log bug lên Jira',                    'Verify bug',       'Ok',                           'U_MENTOR_003'),
+            ('U_INTERN_027', v_report_date, 'Làm Wireframe',                       'UI design',        'Ok',                           'U_MENTOR_004'),
+            ('U_INTERN_028', v_report_date, 'Build pipeline',                      'Deploy test',      'Ok',                           'U_MENTOR_001'),
+            ('U_INTERN_029', v_report_date, 'Nghiên cứu Dialogflow',               'Tạo bot',          'Ok',                           'U_MENTOR_002'),
+            ('U_INTERN_030', v_report_date, 'Peer review FRS của team',            'Hoàn thiện docs',  'Review kỹ phần rule',          'U_MENTOR_004');
 
-            ------------------------------------------------------------
-            -- UPSERT Applications
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [Applications] ON;
-            ;WITH Source ([Id], [ApplicantUserId], [JobDescriptionId], [CVFileUrl], [CoverLetter], [ApplyDate], [Status]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,  N'U_INTERN_001', 1,  N'/cv/1.pdf',  N'Xin ứng tuyển vào vị trí Backend.',      DATEADD(DAY,-15,GETDATE()), N'ACCEPTED'),
-                    (2,  N'U_INTERN_002', 1,  N'/cv/2.pdf',  N'Xin ứng tuyển vào vị trí Backend.',      DATEADD(DAY,-14,GETDATE()), N'INTERVIEW'),
-                    (3,  N'U_INTERN_003', 3,  N'/cv/3.pdf',  N'Xin ứng tuyển vào vị trí AI NLP.',       DATEADD(DAY,-13,GETDATE()), N'ACCEPTED'),
-                    (4,  N'U_INTERN_004', 2,  N'/cv/4.pdf',  N'Xin ứng tuyển vào vị trí Frontend.',     DATEADD(DAY,-12,GETDATE()), N'PENDING'),
-                    (5,  N'U_INTERN_005', 2,  N'/cv/5.pdf',  N'Xin ứng tuyển vào vị trí Frontend.',     DATEADD(DAY,-11,GETDATE()), N'REJECTED'),
-                    (6,  N'U_INTERN_006', 3,  N'/cv/6.pdf',  N'Xin ứng tuyển vào vị trí AI NLP.',       DATEADD(DAY,-10,GETDATE()), N'SCREENING'),
-                    (7,  N'U_INTERN_007', 4,  N'/cv/7.pdf',  N'Xin ứng tuyển vào vị trí QA/QC.',        DATEADD(DAY,-10,GETDATE()), N'ACCEPTED'),
-                    (8,  N'U_INTERN_008', 5,  N'/cv/8.pdf',  N'Xin ứng tuyển vào vị trí BA.',           DATEADD(DAY, -9,GETDATE()), N'ACCEPTED'),
-                    (9,  N'U_INTERN_009', 1,  N'/cv/9.pdf',  N'Xin ứng tuyển vào vị trí Backend.',      DATEADD(DAY, -8,GETDATE()), N'SCREENING'),
-                    (10, N'U_INTERN_010', 5,  N'/cv/10.pdf', N'Xin ứng tuyển vào vị trí BA.',           DATEADD(DAY, -7,GETDATE()), N'INTERVIEW'),
-                    (11, N'U_INTERN_011', 6,  N'/cv/11.pdf', N'Xin ứng tuyển vào vị trí Mobile.',       DATEADD(DAY, -6,GETDATE()), N'ACCEPTED'),
-                    (12, N'U_INTERN_012', 7,  N'/cv/12.pdf', N'Xin ứng tuyển vào vị trí Data.',         DATEADD(DAY, -5,GETDATE()), N'PENDING'),
-                    (13, N'U_INTERN_013', 8,  N'/cv/13.pdf', N'Xin ứng tuyển vào vị trí DevOps.',       DATEADD(DAY, -4,GETDATE()), N'INTERVIEW'),
-                    (14, N'U_INTERN_014', 9,  N'/cv/14.pdf', N'Xin ứng tuyển vào vị trí UI/UX.',        DATEADD(DAY, -3,GETDATE()), N'ACCEPTED'),
-                    (15, N'U_INTERN_015', 10, N'/cv/15.pdf', N'Xin ứng tuyển vào vị trí NodeJS.',       DATEADD(DAY, -2,GETDATE()), N'ACCEPTED'),
-                    (16, N'U_INTERN_016', 1,  N'/cv/16.pdf', N'Xin ứng tuyển vào vị trí Backend.',      DATEADD(DAY,-15,GETDATE()), N'REJECTED'),
-                    (17, N'U_INTERN_017', 2,  N'/cv/17.pdf', N'Xin ứng tuyển vào vị trí Frontend.',     DATEADD(DAY,-14,GETDATE()), N'SCREENING'),
-                    (18, N'U_INTERN_018', 3,  N'/cv/18.pdf', N'Xin ứng tuyển vào vị trí AI NLP.',       DATEADD(DAY,-13,GETDATE()), N'ACCEPTED'),
-                    (19, N'U_INTERN_019', 4,  N'/cv/19.pdf', N'Xin ứng tuyển vào vị trí QA/QC.',        DATEADD(DAY,-12,GETDATE()), N'PENDING'),
-                    (20, N'U_INTERN_020', 5,  N'/cv/20.pdf', N'Xin ứng tuyển vào vị trí BA.',           DATEADD(DAY,-11,GETDATE()), N'INTERVIEW'),
-                    (21, N'U_INTERN_021', 6,  N'/cv/21.pdf', N'Xin ứng tuyển vào vị trí Mobile.',       DATEADD(DAY,-10,GETDATE()), N'ACCEPTED'),
-                    (22, N'U_INTERN_022', 7,  N'/cv/22.pdf', N'Xin ứng tuyển vào vị trí Data.',         DATEADD(DAY, -9,GETDATE()), N'REJECTED'),
-                    (23, N'U_INTERN_023', 8,  N'/cv/23.pdf', N'Xin ứng tuyển vào vị trí DevOps.',       DATEADD(DAY, -8,GETDATE()), N'ACCEPTED'),
-                    (24, N'U_INTERN_024', 9,  N'/cv/24.pdf', N'Xin ứng tuyển vào vị trí UI/UX.',        DATEADD(DAY, -7,GETDATE()), N'SCREENING'),
-                    (25, N'U_INTERN_025', 10, N'/cv/25.pdf', N'Xin ứng tuyển vào vị trí NodeJS.',       DATEADD(DAY, -6,GETDATE()), N'PENDING'),
-                    (26, N'U_INTERN_026', 11, N'/cv/26.pdf', N'Xin ứng tuyển Backend đợt 2.',           DATEADD(DAY, -5,GETDATE()), N'ACCEPTED'),
-                    (27, N'U_INTERN_027', 12, N'/cv/27.pdf', N'Xin ứng tuyển BA đợt 2.',                DATEADD(DAY, -4,GETDATE()), N'INTERVIEW'),
-                    (28, N'U_INTERN_028', 13, N'/cv/28.pdf', N'Xin ứng tuyển QA Automation.',           DATEADD(DAY, -3,GETDATE()), N'ACCEPTED'),
-                    (29, N'U_INTERN_029', 4,  N'/cv/29.pdf', N'Xin ứng tuyển vào vị trí QA/QC.',        DATEADD(DAY, -2,GETDATE()), N'SCREENING'),
-                    (30, N'U_INTERN_030', 5,  N'/cv/30.pdf', N'Xin ứng tuyển vào vị trí BA.',           DATEADD(DAY, -1,GETDATE()), N'ACCEPTED')
-                ) AS V ([Id], [ApplicantUserId], [JobDescriptionId], [CVFileUrl], [CoverLetter], [ApplyDate], [Status])
-            )
-            MERGE [Applications] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [ApplicantUserId], [JobDescriptionId], [CVFileUrl], [CoverLetter], [ApplyDate], [Status])
-                VALUES (S.[Id], S.[ApplicantUserId], S.[JobDescriptionId], S.[CVFileUrl], S.[CoverLetter], S.[ApplyDate], S.[Status]);
-            SET IDENTITY_INSERT [Applications] OFF;
+        RAISE NOTICE '✅ AIMS seed data upserted successfully.';
 
-            ------------------------------------------------------------
-            -- UPSERT CVParsedDatas
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [CVParsedDatas] ON;
-            INSERT INTO [CVParsedDatas] ([Id], [ApplicationId], [FullName], [EmailExtracted], [SkillsExtracted], [RawText], [ParsedAt])
-            SELECT a.Id, a.Id,
-                N'Ứng viên ' + CAST(a.Id AS NVARCHAR(10)),
-                N'uv' + CAST(a.Id AS NVARCHAR(10)) + N'@gmail.com',
-                N'C#, SQL, Git, UML, Postman, k6',
-                N'Dữ liệu CV bóc tách thô...', GETDATE()
-            FROM [Applications] a
-            WHERE NOT EXISTS (SELECT 1 FROM [CVParsedDatas] cv WHERE cv.[ApplicationId] = a.[Id]);
-            SET IDENTITY_INSERT [CVParsedDatas] OFF;
-
-            ------------------------------------------------------------
-            -- UPSERT AIScreeningResults
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [AIScreeningResults] ON;
-            INSERT INTO [AIScreeningResults] ([Id], [ApplicationId], [MatchingScore], [Ranking], [KeywordsMatched], [KeywordsMissing], [ProcessingStatus], [ScreenedAt], [ReviewedByHRId])
-            SELECT a.Id, a.Id,
-                CAST(60.0 + (a.Id % 40) AS decimal(5,2)),
-                (a.Id % 3) + 1,
-                N'C#, SQL, Git',
-                N'Docker, Azure',
-                N'Completed',
-                GETDATE(),
-                CASE WHEN a.Id % 2 = 0 THEN N'U_HR_001' ELSE N'U_HR_002' END
-            FROM [Applications] a
-            WHERE NOT EXISTS (SELECT 1 FROM [AIScreeningResults] ai WHERE ai.[ApplicationId] = a.[Id]);
-            SET IDENTITY_INSERT [AIScreeningResults] OFF;
-
-            ------------------------------------------------------------
-            -- UPSERT Courses
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [Courses] ON;
-            ;WITH Source ([Id], [Title], [Level], [CreatedByUserId], [IsPublished], [CreateDate]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,  N'ASP.NET Core Web API',  N'BEGINNER',     N'U_MENTOR_001', 1, GETDATE()),
-                    (2,  N'EF Core & SQL',          N'INTERMEDIATE', N'U_MENTOR_001', 1, GETDATE()),
-                    (3,  N'NLP CV Screening',       N'INTERMEDIATE', N'U_MENTOR_002', 1, GETDATE()),
-                    (4,  N'Docker & AWS ECR',       N'ADVANCED',     N'U_MENTOR_001', 1, GETDATE()),
-                    (5,  N'Test k6 Performance',    N'INTERMEDIATE', N'U_MENTOR_003', 1, GETDATE()),
-                    (6,  N'BA Thực chiến',          N'BEGINNER',     N'U_MENTOR_004', 1, GETDATE()),
-                    (7,  N'React Native Cơ bản',    N'BEGINNER',     N'U_MENTOR_001', 1, GETDATE()),
-                    (8,  N'PowerBI Dashboard',      N'INTERMEDIATE', N'U_MENTOR_002', 1, GETDATE()),
-                    (9,  N'CI/CD Github Actions',   N'ADVANCED',     N'U_MENTOR_001', 1, GETDATE()),
-                    (10, N'Agile Scrum 101',        N'BEGINNER',     N'U_MENTOR_004', 1, GETDATE())
-                ) AS V ([Id], [Title], [Level], [CreatedByUserId], [IsPublished], [CreateDate])
-            )
-            MERGE [Courses] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Title], [Level], [CreatedByUserId], [IsPublished], [CreateDate])
-                VALUES (S.[Id], S.[Title], S.[Level], S.[CreatedByUserId], S.[IsPublished], S.[CreateDate]);
-            SET IDENTITY_INSERT [Courses] OFF;
-
-            ------------------------------------------------------------
-            -- UPSERT CourseChapters
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [CourseChapters] ON;
-            ;WITH Source ([Id], [CourseId], [Title], [SortOrder]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,1,N'Chương 1',1),(2,2,N'Chương 1',1),(3,3,N'Chương 1',1),(4,4,N'Chương 1',1),(5,5,N'Chương 1',1),
-                    (6,6,N'Chương 1',1),(7,7,N'Chương 1',1),(8,8,N'Chương 1',1),(9,9,N'Chương 1',1),(10,10,N'Chương 1',1)
-                ) AS V ([Id], [CourseId], [Title], [SortOrder])
-            )
-            MERGE [CourseChapters] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [CourseId], [Title], [SortOrder])
-                VALUES (S.[Id], S.[CourseId], S.[Title], S.[SortOrder]);
-            SET IDENTITY_INSERT [CourseChapters] OFF;
-
-            ------------------------------------------------------------
-            -- UPSERT Lessons
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [Lessons] ON;
-            ;WITH Source ([Id], [ChapterId], [Title], [LessonType], [DurationMinutes], [SortOrder], [IsRequired]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1,1,N'REST API',        N'VIDEO',    20,1,1),(2,1, N'JWT Auth',      N'DOCUMENT',30,2,1),
-                    (3,2,N'Migration',       N'VIDEO',    25,1,1),(4,2, N'LINQ',          N'VIDEO',   35,2,1),
-                    (5,3,N'TF-IDF',          N'DOCUMENT', 40,1,1),(6,3, N'Cosine Sim',   N'VIDEO',   30,2,1),
-                    (7,4,N'Dockerfile',      N'VIDEO',    20,1,1),(8,4, N'AWS ECR',       N'DOCUMENT',25,2,1),
-                    (9,5,N'k6 Scripting',    N'VIDEO',    45,1,1),(10,5,N'VU config',     N'DOCUMENT',20,2,1),
-                    (11,6,N'Viết Use Case',  N'VIDEO',    30,1,1),(12,6,N'Viết FRS',      N'DOCUMENT',40,2,1),
-                    (13,7,N'React Hooks',    N'VIDEO',    25,1,1),(14,7,N'Redux',          N'VIDEO',   35,2,1),
-                    (15,8,N'DAX Filter',     N'DOCUMENT', 30,1,1),(16,8,N'Data Viz',      N'VIDEO',   20,2,1),
-                    (17,9,N'YAML file',      N'VIDEO',    25,1,1),(18,9,N'Runners',        N'DOCUMENT',30,2,1),
-                    (19,10,N'Sprint Plan',   N'VIDEO',    20,1,1),(20,10,N'Retro',         N'DOCUMENT',25,2,1)
-                ) AS V ([Id], [ChapterId], [Title], [LessonType], [DurationMinutes], [SortOrder], [IsRequired])
-            )
-            MERGE [Lessons] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [ChapterId], [Title], [LessonType], [DurationMinutes], [SortOrder], [IsRequired])
-                VALUES (S.[Id], S.[ChapterId], S.[Title], S.[LessonType], S.[DurationMinutes], S.[SortOrder], S.[IsRequired]);
-            SET IDENTITY_INSERT [Lessons] OFF;
-
-            ------------------------------------------------------------
-            -- UPSERT Enrollments (unique key: InternUserId + CourseId)
-            ------------------------------------------------------------
-            ;WITH Source ([InternUserId], [CourseId], [EnrollDate], [CompletionPercent]) AS
-            (
-                SELECT * FROM (VALUES
-                    (N'U_INTERN_001',1,GETDATE(),100),(N'U_INTERN_001',4,GETDATE(),100),(N'U_INTERN_002',2,GETDATE(),50),
-                    (N'U_INTERN_003',3,GETDATE(),80), (N'U_INTERN_004',1,GETDATE(),10), (N'U_INTERN_006',3,GETDATE(),95),
-                    (N'U_INTERN_007',5,GETDATE(),100),(N'U_INTERN_008',6,GETDATE(),90), (N'U_INTERN_009',1,GETDATE(),50),
-                    (N'U_INTERN_010',6,GETDATE(),80), (N'U_INTERN_011',7,GETDATE(),30), (N'U_INTERN_012',8,GETDATE(),60),
-                    (N'U_INTERN_013',9,GETDATE(),100),(N'U_INTERN_014',10,GETDATE(),100),(N'U_INTERN_015',10,GETDATE(),0),
-                    (N'U_INTERN_016',1,GETDATE(),10), (N'U_INTERN_017',2,GETDATE(),25), (N'U_INTERN_018',3,GETDATE(),10),
-                    (N'U_INTERN_019',5,GETDATE(),65), (N'U_INTERN_020',6,GETDATE(),45), (N'U_INTERN_021',7,GETDATE(),85),
-                    (N'U_INTERN_022',8,GETDATE(),30), (N'U_INTERN_023',4,GETDATE(),100),(N'U_INTERN_024',9,GETDATE(),40),
-                    (N'U_INTERN_025',10,GETDATE(),100),(N'U_INTERN_026',1,GETDATE(),70),(N'U_INTERN_027',1,GETDATE(),0),
-                    (N'U_INTERN_028',5,GETDATE(),20), (N'U_INTERN_029',4,GETDATE(),15), (N'U_INTERN_030',6,GETDATE(),100)
-                ) AS V ([InternUserId], [CourseId], [EnrollDate], [CompletionPercent])
-            )
-            MERGE [Enrollments] AS T
-            USING Source AS S ON T.[InternUserId] = S.[InternUserId] AND T.[CourseId] = S.[CourseId]
-            WHEN MATCHED THEN UPDATE SET T.[CompletionPercent] = S.[CompletionPercent]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([InternUserId], [CourseId], [EnrollDate], [CompletionPercent])
-                VALUES (S.[InternUserId], S.[CourseId], S.[EnrollDate], S.[CompletionPercent]);
-
-            ------------------------------------------------------------
-            -- UPSERT InternshipPeriods
-            ------------------------------------------------------------
-            SET IDENTITY_INSERT [InternshipPeriods] ON;
-            ;WITH Source ([Id], [Name], [StartDate], [EndDate], [IsActive]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1, N'Kỳ thực tập Spring 2026', DATEADD(DAY,-30,GETDATE()), DATEADD(DAY,60,GETDATE()), 1)
-                ) AS V ([Id], [Name], [StartDate], [EndDate], [IsActive])
-            )
-            MERGE [InternshipPeriods] AS T
-            USING Source AS S ON T.[Id] = S.[Id]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Id], [Name], [StartDate], [EndDate], [IsActive])
-                VALUES (S.[Id], S.[Name], S.[StartDate], S.[EndDate], S.[IsActive]);
-            SET IDENTITY_INSERT [InternshipPeriods] OFF;
-
-            ------------------------------------------------------------
-            -- UPSERT InternAssignments (unique key: InternUserId + PeriodId)
-            ------------------------------------------------------------
-            ;WITH InternOrder AS
-            (
-                SELECT ROW_NUMBER() OVER (ORDER BY u.Id) AS Rn, u.Id AS InternUserId
-                FROM [AppUsers] u WHERE u.Id LIKE N'U_INTERN%'
-            ),
-            Source AS
-            (
-                SELECT
-                    io.InternUserId,
-                    CASE io.Rn % 4
-                        WHEN 1 THEN N'U_MENTOR_001'
-                        WHEN 2 THEN N'U_MENTOR_002'
-                        WHEN 3 THEN N'U_MENTOR_003'
-                        ELSE        N'U_MENTOR_004'
-                    END AS MentorUserId,
-                    ip.Id AS PeriodId,
-                    GETDATE() AS AssignedDate
-                FROM InternOrder io
-                CROSS JOIN [InternshipPeriods] ip
-                WHERE ip.[Name] = N'Kỳ thực tập Spring 2026'
-            )
-            MERGE [InternAssignments] AS T
-            USING Source AS S ON T.[InternUserId] = S.[InternUserId] AND T.[PeriodId] = S.[PeriodId]
-            WHEN MATCHED THEN UPDATE SET T.[MentorUserId] = S.[MentorUserId]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([InternUserId], [MentorUserId], [PeriodId], [AssignedDate])
-                VALUES (S.[InternUserId], S.[MentorUserId], S.[PeriodId], S.[AssignedDate]);
-
-            ------------------------------------------------------------
-            -- UPSERT TaskItems (unique key: AssignmentId + Title)
-            ------------------------------------------------------------
-            ;WITH TaskSource ([Rn], [Title], [Description], [Priority], [Status], [Deadline], [EstimatedHours], [CreateDate], [CreatedByUserId]) AS
-            (
-                SELECT * FROM (VALUES
-                    (1, N'API JWT',                   N'Login endpoint',      N'HIGH',   N'DONE',        DATEADD(DAY,2,GETDATE()),  10, GETDATE(), N'U_MENTOR_001'),
-                    (1, N'Docker AWS',                N'Push image ECR',      N'HIGH',   N'DONE',        DATEADD(DAY,3,GETDATE()),  12, GETDATE(), N'U_MENTOR_001'),
-                    (2, N'TF-IDF CV',                 N'Extract skills',      N'HIGH',   N'IN_PROGRESS', DATEADD(DAY,5,GETDATE()),  16, GETDATE(), N'U_MENTOR_002'),
-                    (3, N'k6 Load Test',              N'100 VUs login',       N'MEDIUM', N'DONE',        DATEADD(DAY,1,GETDATE()),   8, GETDATE(), N'U_MENTOR_003'),
-                    (4, N'Use Case Quản lý thực đơn', N'Vẽ bằng Draw.io',    N'HIGH',   N'DONE',        DATEADD(DAY,4,GETDATE()),  10, GETDATE(), N'U_MENTOR_004'),
-                    (5, N'UI 44px touch',             N'Fix mobile UI',       N'MEDIUM', N'TODO',        DATEADD(DAY,6,GETDATE()),   6, GETDATE(), N'U_MENTOR_001'),
-                    (6, N'Migration DB',              N'LMS module',          N'HIGH',   N'IN_PROGRESS', DATEADD(DAY,2,GETDATE()),  14, GETDATE(), N'U_MENTOR_001'),
-                    (7, N'Cosine Sim',                N'Matching AI',         N'HIGH',   N'TODO',        DATEADD(DAY,8,GETDATE()),  20, GETDATE(), N'U_MENTOR_002'),
-                    (8, N'Test API',                  N'Postman runner',      N'LOW',    N'DONE',        DATEADD(DAY,1,GETDATE()),   4, GETDATE(), N'U_MENTOR_003'),
-                    (9, N'FRS Document',              N'Phần Đăng nhập',      N'HIGH',   N'IN_PROGRESS', DATEADD(DAY,3,GETDATE()),  16, GETDATE(), N'U_MENTOR_004'),
-                    (10,N'Fix Bug #101',              N'Fix crash login',     N'HIGH',   N'DONE',        DATEADD(DAY,2,GETDATE()),   4, GETDATE(), N'U_MENTOR_001'),
-                    (11,N'Data Crawl',                N'Crawl JDs',           N'MEDIUM', N'IN_PROGRESS', DATEADD(DAY,4,GETDATE()),  10, GETDATE(), N'U_MENTOR_002'),
-                    (12,N'Automation UI',             N'Selenium script',     N'HIGH',   N'TODO',        DATEADD(DAY,6,GETDATE()),  12, GETDATE(), N'U_MENTOR_003'),
-                    (13,N'BPMN Quy trình',            N'Tuyển dụng flow',     N'MEDIUM', N'DONE',        DATEADD(DAY,1,GETDATE()),   8, GETDATE(), N'U_MENTOR_004'),
-                    (14,N'Redis Cache',               N'Cache API',           N'HIGH',   N'TODO',        DATEADD(DAY,5,GETDATE()),  12, GETDATE(), N'U_MENTOR_001'),
-                    (15,N'Log ELK',                   N'Config Kibana',       N'MEDIUM', N'IN_PROGRESS', DATEADD(DAY,7,GETDATE()),  16, GETDATE(), N'U_MENTOR_001'),
-                    (16,N'Model Train',               N'Train ML.NET',        N'HIGH',   N'TODO',        DATEADD(DAY,10,GETDATE()), 24, GETDATE(), N'U_MENTOR_002'),
-                    (17,N'Jmeter Test',               N'Load test LMS',       N'MEDIUM', N'DONE',        DATEADD(DAY,-1,GETDATE()),  8, GETDATE(), N'U_MENTOR_003'),
-                    (18,N'UML Class',                 N'Class Diagram',       N'LOW',    N'IN_PROGRESS', DATEADD(DAY,2,GETDATE()),   6, GETDATE(), N'U_MENTOR_004'),
-                    (19,N'React Router',              N'Setup routes',        N'HIGH',   N'DONE',        DATEADD(DAY,1,GETDATE()),   4, GETDATE(), N'U_MENTOR_001'),
-                    (20,N'Clean Data',                N'Remove stopwords',    N'MEDIUM', N'TODO',        DATEADD(DAY,3,GETDATE()),   8, GETDATE(), N'U_MENTOR_002'),
-                    (21,N'Bug report',                N'Log Jira',            N'LOW',    N'DONE',        DATEADD(DAY,0,GETDATE()),   2, GETDATE(), N'U_MENTOR_003'),
-                    (22,N'Wireframe',                 N'Dashboard UI',        N'HIGH',   N'IN_PROGRESS', DATEADD(DAY,5,GETDATE()),  12, GETDATE(), N'U_MENTOR_004'),
-                    (23,N'CI/CD Pipeline',            N'Github Actions',      N'HIGH',   N'TODO',        DATEADD(DAY,7,GETDATE()),  16, GETDATE(), N'U_MENTOR_001'),
-                    (24,N'Chatbot AI',                N'Dialogflow',          N'MEDIUM', N'IN_PROGRESS', DATEADD(DAY,9,GETDATE()),  20, GETDATE(), N'U_MENTOR_002'),
-                    (25,N'Pen Test',                  N'OWASP Top 10',        N'HIGH',   N'TODO',        DATEADD(DAY,12,GETDATE()), 24, GETDATE(), N'U_MENTOR_003'),
-                    (26,N'User Story',                N'Sprint 1',            N'MEDIUM', N'DONE',        DATEADD(DAY,-2,GETDATE()),  8, GETDATE(), N'U_MENTOR_004'),
-                    (27,N'Entity Rel',                N'ERD Diagram',         N'HIGH',   N'IN_PROGRESS', DATEADD(DAY,1,GETDATE()),   6, GETDATE(), N'U_MENTOR_001'),
-                    (28,N'AWS S3',                    N'Upload CV API',       N'MEDIUM', N'TODO',        DATEADD(DAY,4,GETDATE()),  10, GETDATE(), N'U_MENTOR_001'),
-                    (29,N'Review Doc',                N'Peer review',         N'LOW',    N'DONE',        DATEADD(DAY,-1,GETDATE()),  4, GETDATE(), N'U_MENTOR_004')
-                ) AS V ([Rn], [Title], [Description], [Priority], [Status], [Deadline], [EstimatedHours], [CreateDate], [CreatedByUserId])
-            ),
-            InternOrder AS
-            (
-                SELECT ROW_NUMBER() OVER (ORDER BY u.Id) AS Rn, u.Id AS InternUserId
-                FROM [AppUsers] u WHERE u.Id LIKE N'U_INTERN%'
-            ),
-            Source AS
-            (
-                SELECT ia.Id AS AssignmentId,
-                       ts.Title, ts.Description, ts.Priority, ts.Status,
-                       ts.Deadline, ts.EstimatedHours, ts.CreateDate, ts.CreatedByUserId
-                FROM TaskSource ts
-                INNER JOIN InternOrder io ON io.Rn = ts.Rn
-                INNER JOIN [InternshipPeriods] ip ON ip.[Name] = N'Kỳ thực tập Spring 2026'
-                INNER JOIN [InternAssignments] ia ON ia.InternUserId = io.InternUserId AND ia.PeriodId = ip.Id
-            )
-            MERGE [TaskItems] AS T
-            USING Source AS S ON T.[AssignmentId] = S.[AssignmentId] AND T.[Title] = S.[Title]
-            WHEN MATCHED THEN
-                UPDATE SET T.[Description] = S.[Description], T.[Priority] = S.[Priority],
-                           T.[Status] = S.[Status], T.[Deadline] = S.[Deadline],
-                           T.[EstimatedHours] = S.[EstimatedHours], T.[CreatedByUserId] = S.[CreatedByUserId]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([Title], [Description], [AssignmentId], [Priority], [Status], [Deadline], [EstimatedHours], [CreateDate], [CreatedByUserId])
-                VALUES (S.[Title], S.[Description], S.[AssignmentId], S.[Priority], S.[Status], S.[Deadline], S.[EstimatedHours], S.[CreateDate], S.[CreatedByUserId]);
-
-            ------------------------------------------------------------
-            -- UPSERT DailyReports (unique key: InternUserId + date(ReportDate))
-            ------------------------------------------------------------
-            DELETE dr
-            FROM [DailyReports] dr
-            WHERE CONVERT(date, dr.[ReportDate]) = CONVERT(date, @SeedDate)
-              AND dr.[InternUserId] LIKE N'U_INTERN_%'
-              AND dr.[ReviewedByMentorId] LIKE N'U_MENTOR_%'
-              AND dr.[Content] IN (
-                    N'Đẩy xong Docker image lên ECR',
-                    N'Migration DB bị lỗi FK',
-                    N'Bóc tách được 50 từ khóa CV',
-                    N'Làm mockup Figma',
-                    N'Học OWASP',
-                    N'Viết User Story',
-                    N'Chạy script k6 pass 100 VUs',
-                    N'Vẽ xong Use Case Quản lý thực đơn',
-                    N'Test API login bằng Postman',
-                    N'Vẽ ERD',
-                    N'Code React component',
-                    N'Crawl data JD',
-                    N'Viết script Selenium',
-                    N'Vẽ BPMN',
-                    N'Đọc tài liệu Agile',
-                    N'Setup S3 bucket',
-                    N'Đọc tài liệu',
-                    N'Tìm hiểu Redis',
-                    N'Setup ELK',
-                    N'Tìm hiểu ML.NET',
-                    N'Chạy Jmeter',
-                    N'Vẽ Class Diagram',
-                    N'Setup xong Github Actions',
-                    N'Code React Router',
-                    N'Clear stopwords',
-                    N'Log bug lên Jira',
-                    N'Làm Wireframe',
-                    N'Build pipeline',
-                    N'Nghiên cứu Dialogflow',
-                    N'Peer review FRS của team'
-                );
-
-            ;WITH Source ([InternUserId], [ReportDate], [Content], [PlannedTomorrow], [MentorFeedback], [ReviewedByMentorId]) AS
-            (
-                SELECT * FROM (VALUES
-                    (N'U_INTERN_001',@DemoReportDate,N'Đẩy xong Docker image lên ECR',       N'Tích hợp ECS',     N'Tốt, nhớ check IAM policy',       N'U_MENTOR_001'),
-                    (N'U_INTERN_002',@DemoReportDate,N'Migration DB bị lỗi FK',              N'Fix lỗi cascade',  N'Xem lại ERD',                     N'U_MENTOR_001'),
-                    (N'U_INTERN_003',@DemoReportDate,N'Bóc tách được 50 từ khóa CV',         N'Tính TF-IDF',      N'Cần lọc thêm stopwords',          N'U_MENTOR_002'),
-                    (N'U_INTERN_004',@DemoReportDate,N'Làm mockup Figma',                    N'Xin review',       N'Cần chú ý 44px touch target',     N'U_MENTOR_004'),
-                    (N'U_INTERN_005',@DemoReportDate,N'Học OWASP',                           N'Test SQLi',        N'Ok',                              N'U_MENTOR_003'),
-                    (N'U_INTERN_006',@DemoReportDate,N'Viết User Story',                     N'Estimation',       N'Ok',                              N'U_MENTOR_004'),
-                    (N'U_INTERN_007',@DemoReportDate,N'Chạy script k6 pass 100 VUs',         N'Report kết quả',   N'Kiểm tra lại RAM usage',          N'U_MENTOR_003'),
-                    (N'U_INTERN_008',@DemoReportDate,N'Vẽ xong Use Case Quản lý thực đơn',  N'Viết FRS',         N'Logic đúng chuẩn',                N'U_MENTOR_004'),
-                    (N'U_INTERN_009',@DemoReportDate,N'Test API login bằng Postman',         N'Test API Register',N'Ok',                              N'U_MENTOR_003'),
-                    (N'U_INTERN_010',@DemoReportDate,N'Vẽ ERD',                              N'Migration',        N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_011',@DemoReportDate,N'Code React component',                N'Ghép API',         N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_012',@DemoReportDate,N'Crawl data JD',                       N'Clean data',       N'Ok',                              N'U_MENTOR_002'),
-                    (N'U_INTERN_013',@DemoReportDate,N'Viết script Selenium',                N'Chạy thử',         N'Ok',                              N'U_MENTOR_003'),
-                    (N'U_INTERN_014',@DemoReportDate,N'Vẽ BPMN',                             N'Review',           N'Ok',                              N'U_MENTOR_004'),
-                    (N'U_INTERN_015',@DemoReportDate,N'Đọc tài liệu Agile',                 N'Học Jira',         N'Tốt',                             N'U_MENTOR_004'),
-                    (N'U_INTERN_016',@DemoReportDate,N'Setup S3 bucket',                     N'Code API',         N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_017',@DemoReportDate,N'Đọc tài liệu',                        N'Peer review',      N'Ok',                              N'U_MENTOR_004'),
-                    (N'U_INTERN_018',@DemoReportDate,N'Tìm hiểu Redis',                      N'Code demo',        N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_019',@DemoReportDate,N'Setup ELK',                           N'Config Logstash',  N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_020',@DemoReportDate,N'Tìm hiểu ML.NET',                    N'Train model',      N'Ok',                              N'U_MENTOR_002'),
-                    (N'U_INTERN_021',@DemoReportDate,N'Chạy Jmeter',                         N'Đọc report',       N'Ok',                              N'U_MENTOR_003'),
-                    (N'U_INTERN_022',@DemoReportDate,N'Vẽ Class Diagram',                    N'Code entity',      N'Ok',                              N'U_MENTOR_004'),
-                    (N'U_INTERN_023',@DemoReportDate,N'Setup xong Github Actions',           N'Test push code',   N'Tốt',                             N'U_MENTOR_001'),
-                    (N'U_INTERN_024',@DemoReportDate,N'Code React Router',                   N'Code UI',          N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_025',@DemoReportDate,N'Clear stopwords',                     N'NLP',              N'Ok',                              N'U_MENTOR_002'),
-                    (N'U_INTERN_026',@DemoReportDate,N'Log bug lên Jira',                    N'Verify bug',       N'Ok',                              N'U_MENTOR_003'),
-                    (N'U_INTERN_027',@DemoReportDate,N'Làm Wireframe',                       N'UI design',        N'Ok',                              N'U_MENTOR_004'),
-                    (N'U_INTERN_028',@DemoReportDate,N'Build pipeline',                      N'Deploy test',      N'Ok',                              N'U_MENTOR_001'),
-                    (N'U_INTERN_029',@DemoReportDate,N'Nghiên cứu Dialogflow',               N'Tạo bot',          N'Ok',                              N'U_MENTOR_002'),
-                    (N'U_INTERN_030',@DemoReportDate,N'Peer review FRS của team',            N'Hoàn thiện docs',  N'Review kỹ phần rule',             N'U_MENTOR_004')
-                ) AS V ([InternUserId], [ReportDate], [Content], [PlannedTomorrow], [MentorFeedback], [ReviewedByMentorId])
-            )
-            MERGE [DailyReports] AS T
-            USING Source AS S ON T.[InternUserId] = S.[InternUserId]
-                              AND CONVERT(date, T.[ReportDate]) = CONVERT(date, S.[ReportDate])
-            WHEN MATCHED THEN
-                UPDATE SET T.[Content] = S.[Content], T.[PlannedTomorrow] = S.[PlannedTomorrow],
-                           T.[MentorFeedback] = S.[MentorFeedback], T.[ReviewedByMentorId] = S.[ReviewedByMentorId]
-            WHEN NOT MATCHED BY TARGET THEN
-                INSERT ([InternUserId], [ReportDate], [Content], [PlannedTomorrow], [MentorFeedback], [ReviewedByMentorId])
-                VALUES (S.[InternUserId], S.[ReportDate], S.[Content], S.[PlannedTomorrow], S.[MentorFeedback], S.[ReviewedByMentorId]);
-
-            COMMIT;
-            PRINT N'✅ AIMS seed data upserted successfully.';
-        END TRY
-        BEGIN CATCH
-            IF @@TRANCOUNT > 0 ROLLBACK;
-            DECLARE @Msg nvarchar(4000) = ERROR_MESSAGE();
-            DECLARE @Sev int           = ERROR_SEVERITY();
-            DECLARE @St  int           = ERROR_STATE();
-            PRINT @Msg;
-            RAISERROR(@Msg, @Sev, @St);
-        END CATCH;
+        EXCEPTION
+            WHEN OTHERS THEN
+                RAISE EXCEPTION '❌ Seed failed: %  DETAIL: %', SQLERRM, SQLSTATE;
+        END;
+        $$;
         """;
 }
