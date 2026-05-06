@@ -20,13 +20,16 @@ public class CertificatesController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     // POST /api/certificates/generate/{attemptId}
-    // Tự động sinh Certificate nếu IsPassed = true
+    // Sinh Certificate chỉ khi:
+    // 1. Quiz là final quiz (LessonId == null)
+    // 2. Attempt passed (IsPassed = true)
+    // 3. Course đã hoàn thành (enrollment.CompletedDate != null)
     // ─────────────────────────────────────────────────────────
     [HttpPost("generate/{attemptId}")]
     [Authorize(Roles = "Intern")]
     public async Task<IActionResult> Generate(int attemptId)
     {
-            var userId = User.GetUserId();
+        var userId = User.GetUserId();
 
         var attempt = await _context.UserQuizAttempts
             .Include(a => a.QuizBank)
@@ -37,13 +40,38 @@ public class CertificatesController : ControllerBase
         if (attempt == null)
             return NotFound(new { message = "Attempt không tồn tại." });
 
+        // ── Kiểm tra 1: Quiz phải là FINAL QUIZ (LessonId == null) ──
+        if (attempt.QuizBank.LessonId.HasValue)
+            return BadRequest(new
+            {
+                message = "Đây là bài quiz của bài học, không phải bài kiểm tra cuối khóa. Chứng chỉ chỉ được cấp khi hoàn thành toàn bộ khóa học.",
+                isFinalQuiz = false,
+            });
+
+        // ── Kiểm tra 2: Attempt phải PASS ──
         if (attempt.IsPassed != true)
             return BadRequest(new
             {
-                message = $"Bạn chưa vượt qua bài kiểm tra. Điểm {attempt.TotalScore} chưa đủ."
+                message = $"Bạn chưa vượt qua bài kiểm tra cuối cùng. Điểm {attempt.TotalScore} chưa đủ.",
+                isFinalQuiz = true,
+                isPassed = false,
             });
 
-        // Kiểm tra đã có certificate chưa
+        // ── Kiểm tra 3: Khóa học phải đã hoàn thành (100%) ──
+        var enrollment = await _context.Enrollments
+            .FirstOrDefaultAsync(e => e.CourseId == attempt.QuizBank.CourseId
+                                   && e.InternUserId == userId);
+
+        if (enrollment == null || enrollment.CompletedDate == null)
+            return BadRequest(new
+            {
+                message = "Bạn chưa hoàn thành toàn bộ khóa học. Vui lòng hoàn thành tất cả các bài học và bài kiểm tra.",
+                isFinalQuiz = true,
+                isPassed = true,
+                courseCompletionPercent = enrollment?.CompletionPercent ?? 0,
+            });
+
+        // ── Kiểm tra đã có certificate chưa ──
         var existing = await _context.Certificates
             .FirstOrDefaultAsync(c => c.AttemptId == attemptId);
 
@@ -54,9 +82,10 @@ public class CertificatesController : ControllerBase
                 certificateCode = existing.CertificateCode,
                 issuedDate = existing.IssuedDate,
                 certificateUrl = existing.CertificateUrl,
+                isCertificateIssued = true,
             });
 
-        // Sinh certificate mới
+        // ── Sinh certificate mới ──
         var certCode = $"AIMS-{DateTime.UtcNow:yyyyMM}-{Guid.NewGuid().ToString("N")[..8].ToUpper()}";
 
         var certificate = new Certificate
@@ -74,11 +103,12 @@ public class CertificatesController : ControllerBase
 
         return Ok(new
         {
-            message = "🎓 Chứng chỉ đã được cấp thành công!",
+            message = "🎓 Chúc mừng! Chứng chỉ đã được cấp thành công!",
             certificateCode = certificate.CertificateCode,
             courseTitle = attempt.QuizBank.Course.Title,
             issuedDate = certificate.IssuedDate,
             certificateUrl = certificate.CertificateUrl,
+            isCertificateIssued = true,
         });
     }
 
@@ -88,7 +118,7 @@ public class CertificatesController : ControllerBase
     [Authorize(Roles = "Intern")]
     public async Task<IActionResult> GetMyCertificates()
     {
-            var userId = User.GetUserId();
+        var userId = User.GetUserId();
 
         var certs = await _context.Certificates
             .Include(c => c.Course)

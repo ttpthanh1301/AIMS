@@ -1,0 +1,194 @@
+@{
+    ViewData["Title"] = "Nhật ký hoạt động";
+    var page = ViewData["CurrentPage"]?.ToString() ?? "1";
+    var userId = ViewData["UserId"]?.ToString();
+    var action = ViewData["Action"]?.ToString();
+    var fromDate = ViewData["FromDate"]?.ToString();
+    var toDate = ViewData["ToDate"]?.ToString();
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Nhật ký hoạt động</h3>
+        <p class="text-muted mb-0">Theo dõi tất cả các hành động của người dùng trong hệ thống</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" asp-action="Summary">
+            <i class="bi bi-graph-up me-2"></i>Thống kê
+        </a>
+        <a class="btn btn-primary" asp-action="Export" 
+           asp-route-fromDate="@fromDate" 
+           asp-route-toDate="@toDate">
+            <i class="bi bi-download me-2"></i>Xuất CSV
+        </a>
+    </div>
+</div>
+
+@if (ViewData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        @ViewData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-lg-3">
+                <label class="form-label fw-semibold">ID Người dùng</label>
+                <input type="text" class="form-control" name="userId" value="@userId"
+                       placeholder="Tìm theo ID người dùng" />
+            </div>
+            <div class="col-lg-3">
+                <label class="form-label fw-semibold">Hành động</label>
+                <input type="text" class="form-control" name="action" value="@action"
+                       placeholder="Tìm theo hành động (POST, PUT, DELETE...)" />
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label fw-semibold">Từ ngày</label>
+                <input type="date" class="form-control" name="fromDate" value="@fromDate" />
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label fw-semibold">Đến ngày</label>
+                <input type="date" class="form-control" name="toDate" value="@toDate" />
+            </div>
+            <div class="col-lg-2 d-flex align-items-end">
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="bi bi-funnel me-2"></i>Lọc
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            @if (ViewBag.Data != null && ViewBag.Data.Count > 0)
+            {
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 15%;">Người dùng</th>
+                            <th style="width: 15%;">Hành động</th>
+                            <th style="width: 15%;">Thực thể</th>
+                            <th style="width: 20%;">Nội dung</th>
+                            <th style="width: 20%;">Thời gian</th>
+                            <th class="text-end" style="width: 15%;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in ViewBag.Data)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="text-truncate">
+                                        <strong>@log.UserName</strong><br />
+                                        <small class="text-muted">@log.UserId</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">@log.Action</span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(log.EntityName))
+                                    {
+                                        <text>@log.EntityName</text>
+                                        @if (!string.IsNullOrEmpty(log.EntityId))
+                                        {
+                                            <small class="text-muted d-block">#@log.EntityId</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(log.Content))
+                                    {
+                                        <span class="text-truncate d-block" title="@log.Content">
+                                            @log.Content
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="text-nowrap">
+                                        @((DateTime)log.CreateDate).ToString("dd/MM/yyyy HH:mm:ss")
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a class="btn btn-outline-primary" 
+                                           asp-action="UserActivities" 
+                                           asp-route-userId="@log.UserId"
+                                           title="Xem tất cả hoạt động của người dùng">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <!-- Pagination -->
+                <div class="card-footer bg-light">
+                    <nav class="d-flex justify-content-between align-items-center">
+                        <div class="text-muted">
+                            Tổng: <strong>@ViewBag.TotalCount</strong> hành động
+                        </div>
+                        @if (ViewBag.TotalPages > 1)
+                        {
+                            <ul class="pagination mb-0">
+                                @for (int i = 1; i <= ViewBag.TotalPages; i++)
+                                {
+                                    <li class="page-item @(i == int.Parse(page) ? "active" : "")">
+                                        <a class="page-link" 
+                                           asp-action="Index" 
+                                           asp-route-page="@i"
+                                           asp-route-userId="@userId"
+                                           asp-route-action="@action"
+                                           asp-route-fromDate="@fromDate"
+                                           asp-route-toDate="@toDate">
+                                            @i
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </nav>
+                </div>
+            }
+            else
+            {
+                <div class="p-5 text-center text-muted">
+                    <i class="bi bi-inbox" style="font-size: 3rem; opacity: 0.3;"></i>
+                    <p class="mt-3">Không có nhật ký nào phù hợp với điều kiện tìm kiếm</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-responsive {
+        max-height: none;
+    }
+    
+    .badge {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.65rem;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+</style>

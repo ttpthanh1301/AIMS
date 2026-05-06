@@ -1,3 +1,4 @@
+using AIMS.BackendServer.Data.Converters;
 using AIMS.BackendServer.Data.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +57,26 @@ public class AimsDbContext : IdentityDbContext<AppUser, AppRole, string>
         builder.Entity<Microsoft.AspNetCore.Identity.IdentityUserLogin<string>>().ToTable("UserLogins");
         builder.Entity<Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>>().ToTable("RoleClaims");
         builder.Entity<Microsoft.AspNetCore.Identity.IdentityUserToken<string>>().ToTable("UserTokens");
+
+        // Apply global UTC DateTime converter for PostgreSQL compatibility
+        // This ensures all DateTime values have Kind=UTC before being sent to PostgreSQL
+        var utcConverter = new UtcDateTimeConverter();
+        var nullableUtcConverter = new UtcNullableDateTimeConverter();
+
+        foreach (var entityType in builder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime))
+                {
+                    property.SetValueConverter(utcConverter);
+                }
+                else if (property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(nullableUtcConverter);
+                }
+            }
+        }
 
         // Áp dụng tất cả Fluent API configurations
         builder.ApplyConfigurationsFromAssembly(typeof(AimsDbContext).Assembly);

@@ -94,7 +94,8 @@
                     <div class="row mb-3">
                         <div class="col-7">
                             <label class="form-label fw-semibold">Loại</label>
-                            <select name="questionType" class="form-select form-select-sm">
+                            <select name="questionType" class="form-select form-select-sm"
+                                    id="questionType" onchange="updateQuestionTypeUI()">
                                 <option value="SINGLE">Single choice</option>
                                 <option value="MULTIPLE">Multiple choice</option>
                                 <option value="TEXT">Text</option>
@@ -108,39 +109,41 @@
                         </div>
                     </div>
 
-                    <label class="form-label fw-semibold">
-                        Đáp án <small class="text-muted">(✓ = đúng)</small>
-                    </label>
+                    <div id="optionsSection">
+                        <label class="form-label fw-semibold">
+                            Đáp án <small class="text-muted">(✓ = đúng)</small>
+                        </label>
 
-                    <div id="optionsList">
-                        @for (int i = 0; i < 4; i++)
-                        {
-                            <div class="input-group mb-2 option-row">
-                                <div class="input-group-text bg-white">
-                                    <input type="checkbox"
-                                           name="isCorrects"
-                                           value="true"
-                                           title="Đáp án đúng" />
+                        <div id="optionsList">
+                            @for (int i = 0; i < 4; i++)
+                            {
+                                <div class="input-group mb-2 option-row">
+                                    <div class="input-group-text bg-white">
+                                        <input type="checkbox"
+                                               name="isCorrects"
+                                               value="true"
+                                               title="Đáp án đúng" />
+                                    </div>
+                                    <input type="text"
+                                           name="optionTexts"
+                                           class="form-control form-control-sm"
+                                           placeholder="Đáp án @(i + 1)" />
+                                    @if (i >= 2)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-outline-danger btn-sm"
+                                                onclick="removeOption(this)">✕</button>
+                                    }
                                 </div>
-                                <input type="text"
-                                       name="optionTexts"
-                                       class="form-control form-control-sm"
-                                       placeholder="Đáp án @(i + 1)" />
-                                @if (i >= 2)
-                                {
-                                    <button type="button"
-                                            class="btn btn-outline-danger btn-sm"
-                                            onclick="removeOption(this)">✕</button>
-                                }
-                            </div>
-                        }
-                    </div>
+                            }
+                        </div>
 
-                    <button type="button"
-                            class="btn btn-outline-secondary btn-sm w-100 mb-3"
-                            onclick="addOption()">
-                        <i class="bi bi-plus me-1"></i>Thêm đáp án
-                    </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-sm w-100 mb-3"
+                                onclick="addOption()">
+                            <i class="bi bi-plus me-1"></i>Thêm đáp án
+                        </button>
+                    </div>
 
                     <button type="submit" class="btn btn-primary w-100"
                             onclick="return prepareSubmit()">
@@ -154,6 +157,23 @@
 
 @section Scripts {
 <script>
+function updateQuestionTypeUI() {
+    const questionType = document.querySelector('#questionType')?.value || 'SINGLE';
+    const optionsSection = document.getElementById('optionsSection');
+    
+    // Ẩn section đáp án nếu loại câu hỏi là TEXT
+    if (questionType === 'TEXT') {
+        optionsSection.style.display = 'none';
+    } else {
+        optionsSection.style.display = 'block';
+    }
+}
+
+// Chạy khi trang load
+document.addEventListener('DOMContentLoaded', function() {
+    updateQuestionTypeUI();
+});
+
 function addOption() {
     const list  = document.getElementById('optionsList');
     const count = list.querySelectorAll('.option-row').length + 1;
@@ -183,7 +203,12 @@ function prepareSubmit() {
         .map(input => input.value.trim())
         .filter(Boolean);
 
-    if (questionType !== 'TEXT' && optionTexts.length < 2) {
+    // Loại TEXT không cần kiểm tra đáp án
+    if (questionType === 'TEXT') {
+        return true;
+    }
+
+    if (optionTexts.length < 2) {
         alert('Câu hỏi trắc nghiệm phải có ít nhất 2 đáp án.');
         return false;
     }

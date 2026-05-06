@@ -78,6 +78,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
+builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 builder.Services.AddSingleton<AIMS.BackendServer.Services.ML.IScreeningModelService, AIMS.BackendServer.Services.ML.ScreeningModelService>();
 builder.Services.AddScoped<IAIScreeningService, AIScreeningService>();
 builder.Services.AddSingleton<AIMS.BackendServer.Services.ML.IFeatureExporter, AIMS.BackendServer.Services.ML.FeatureExporter>();
@@ -150,6 +151,7 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<AIMS.BackendServer.Middleware.PermissionMiddleware>();
+app.UseMiddleware<AIMS.BackendServer.Middleware.ActivityLoggingMiddleware>();
 app.MapControllers();
 
 app.Run();

@@ -10,6 +10,10 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
     {
         builder.Property(x => x.EstimatedHours).HasPrecision(5, 2); // 999.99
 
+        // Set database default for CreateDate
+        builder.Property(x => x.CreateDate)
+            .HasDefaultValueSql("NOW()");
+
         // Tránh cascade delete vòng
         builder.HasOne(x => x.CreatedByUser)
             .WithMany()

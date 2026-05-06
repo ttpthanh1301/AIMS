@@ -176,6 +176,11 @@ public class TasksController : ControllerBase
         if (User.IsInRole("Mentor") && assignment.MentorUserId != userId)
             return Forbid();
 
+        // Ensure Deadline is UTC
+        var deadline = request.Deadline.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(request.Deadline, DateTimeKind.Utc)
+            : request.Deadline.ToUniversalTime();
+
         var task = new TaskItem
         {
             Title = request.Title,
@@ -183,7 +188,7 @@ public class TasksController : ControllerBase
             AssignmentId = request.AssignmentId,
             Priority = request.Priority.ToUpper(),
             Status = "TODO",
-            Deadline = request.Deadline,
+            Deadline = deadline,
             EstimatedHours = request.EstimatedHours,
             CreateDate = DateTime.UtcNow,
             CreatedByUserId = userId,
@@ -226,10 +231,15 @@ public class TasksController : ControllerBase
         if (User.IsInRole("Mentor") && task.Assignment.MentorUserId != userId)
             return Forbid();
 
+        // Ensure Deadline is UTC
+        var deadline = request.Deadline.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(request.Deadline, DateTimeKind.Utc)
+            : request.Deadline.ToUniversalTime();
+
         task.Title = request.Title;
         task.Description = request.Description;
         task.Priority = request.Priority.ToUpper();
-        task.Deadline = request.Deadline;
+        task.Deadline = deadline;
         task.EstimatedHours = request.EstimatedHours;
 
         await _context.SaveChangesAsync();

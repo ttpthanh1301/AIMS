@@ -37,21 +37,57 @@
                     <small class="text-muted ms-2">(@q.Score điểm)</small>
                 </div>
                 <div class="ps-3">
-                    @foreach (var opt in q.Options)
+                    @if (q.QuestionType?.ToUpper() == "TEXT")
                     {
-                        <div class="form-check mb-2">
-                            <input type="radio"
-                                   class="form-check-input"
-                                   name="q_@q.Id"
-                                   value="@opt.Id"
-                                   id="opt_@opt.Id"
-                                   required />
-                            <label class="form-check-label"
-                                   for="opt_@opt.Id"
-                                   class="quiz-option-label">
-                                @opt.OptionText
-                            </label>
-                        </div>
+                        <!-- Loại TEXT - hiển thị textarea -->
+                        <textarea name="q_@q.Id"
+                                  class="form-control"
+                                  rows="4"
+                                  placeholder="Nhập câu trả lời của bạn..."
+                                  required></textarea>
+                        <small class="text-muted d-block mt-2">
+                            <i class="bi bi-info-circle"></i>
+                            Trả lời sẽ được mentor chấm điểm
+                        </small>
+                    }
+                    else if (q.QuestionType?.ToUpper() == "MULTIPLE")
+                    {
+                        <!-- MULTIPLE choice: checkbox (chọn nhiều) -->
+                        @foreach (var opt in q.Options)
+                        {
+                            <div class="form-check mb-2">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       name="q_@q.Id"
+                                       value="@opt.Id"
+                                       id="opt_@opt.Id" />
+                                <label class="form-check-label"
+                                       for="opt_@opt.Id"
+                                       class="quiz-option-label">
+                                    @opt.OptionText
+                                </label>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <!-- SINGLE choice: radio (chọn 1) -->
+                        @foreach (var opt in q.Options)
+                        {
+                            <div class="form-check mb-2">
+                                <input type="radio"
+                                       class="form-check-input"
+                                       name="q_@q.Id"
+                                       value="@opt.Id"
+                                       id="opt_@opt.Id"
+                                       required />
+                                <label class="form-check-label"
+                                       for="opt_@opt.Id"
+                                       class="quiz-option-label">
+                                    @opt.OptionText
+                                </label>
+                            </div>
+                        }
                     }
                 </div>
             </div>

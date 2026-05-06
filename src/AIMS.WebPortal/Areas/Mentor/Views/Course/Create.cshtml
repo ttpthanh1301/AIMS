@@ -88,6 +88,19 @@
     const thumbnailPreview = document.getElementById('thumbnailPreview');
     const thumbnailPlaceholder = document.getElementById('thumbnailPlaceholder');
 
+    function setPreviewState(url) {
+        if (url) {
+            thumbnailPreview.src = url;
+            thumbnailPreview.classList.remove('is-hidden');
+            thumbnailPlaceholder.classList.add('is-hidden');
+            return;
+        }
+
+        thumbnailPreview.removeAttribute('src');
+        thumbnailPreview.classList.add('is-hidden');
+        thumbnailPlaceholder.classList.remove('is-hidden');
+    }
+
     thumbnailFile?.addEventListener('change', async () => {
         const file = thumbnailFile.files?.[0];
         if (!file) return;
@@ -102,9 +115,7 @@
             if (!response.ok) throw new Error(data.message || 'Upload thất bại');
 
             thumbnailUrl.value = data.url;
-            thumbnailPreview.src = data.url;
-            thumbnailPreview.style.display = 'block';
-            thumbnailPlaceholder.style.display = 'none';
+            setPreviewState(data.url);
             thumbnailStatus.textContent = 'Đã tải thumbnail.';
         } catch (error) {
             thumbnailStatus.textContent = error.message || 'Upload thất bại';

@@ -1,0 +1,89 @@
+@using AIMS.ViewModels.LMS
+@model QuizAttemptReviewVm
+@{
+    ViewData["Title"] = "Chấm bài tự luận";
+    var review = Model;
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h4 class="fw-bold mb-1">@review.QuizTitle</h4>
+        <div class="text-muted">Học viên: @review.InternName</div>
+        <div class="small text-muted">
+            Lần thi #@review.AttemptNumber • Nộp lúc @review.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+        </div>
+    </div>
+    <a asp-action="PendingReviews" asp-route-quizId="@review.QuizBankId" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Quay lại danh sách
+    </a>
+</div>
+
+<form asp-action="ReviewAttempt" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="AttemptId" value="@review.AttemptId" />
+    <input type="hidden" name="QuizBankId" value="@review.QuizBankId" />
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="text-muted">Còn @review.PendingCount câu tự luận cần chấm</div>
+        <button type="submit" class="btn btn-warning">
+            <i class="bi bi-save me-1"></i>Lưu kết quả chấm
+        </button>
+    </div>
+
+    @for (var i = 0; i < review.PendingAnswers.Count; i++)
+    {
+        var answer = review.PendingAnswers[i];
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <div class="fw-bold">Câu @(i + 1)</div>
+                        <div class="text-muted small">Tối đa @answer.Score điểm</div>
+                    </div>
+                    <div class="badge bg-light text-dark border">Question ID: @answer.QuestionId</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Đề bài</label>
+                    <div class="border rounded-3 p-3 bg-light-subtle">@answer.QuestionText</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Câu trả lời của học viên</label>
+                    <div class="border rounded-3 p-3" style="white-space: pre-wrap;">@(string.IsNullOrWhiteSpace(answer.AnswerText) ? "(Không có nội dung)" : answer.AnswerText)</div>
+                </div>
+
+                <input type="hidden" name="Gradings[@i].AnswerId" value="@answer.Id" />
+
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-semibold">Điểm</label>
+                        <input name="Gradings[@i].Score"
+                               type="number"
+                               class="form-control"
+                               min="0"
+                               max="@answer.Score"
+                               step="0.5"
+                               value="@answer.Score"
+                               required />
+                    </div>
+                    <div class="col-md-9 mb-3">
+                        <label class="form-label fw-semibold">Nhận xét</label>
+                        <textarea name="Gradings[@i].Feedback"
+                                  class="form-control"
+                                  rows="3"
+                                  placeholder="Nhập nhận xét cho học viên..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</form>

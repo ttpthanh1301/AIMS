@@ -741,29 +741,10 @@ public static class DbInitializer
 
         ------------------------------------------------------------
         -- DailyReports
-        -- DELETE seed cũ (theo content) rồi INSERT lại → luôn fresh
+        -- UPSERT (INSERT ... ON CONFLICT): idempotent, chạy lại nhiều lần cũng OK
+        -- Conflict key: (InternUserId, ReportDate)
+        -- Khi conflict → UPDATE các trường (Content, PlannedTomorrow, MentorFeedback, ReviewedByMentorId)
         ------------------------------------------------------------
-        DELETE FROM "DailyReports"
-        WHERE "ReportDate"::DATE = v_report_date
-          AND "InternUserId" LIKE 'U_INTERN_%'
-          AND "Content" IN (
-            'Đẩy xong Docker image lên ECR', 'Migration DB bị lỗi FK',
-            'Bóc tách được 50 từ khóa CV',   'Làm mockup Figma',
-            'Học OWASP',                      'Viết User Story',
-            'Chạy script k6 pass 100 VUs',    'Vẽ xong Use Case Quản lý thực đơn',
-            'Test API login bằng Postman',     'Vẽ ERD',
-            'Code React component',            'Crawl data JD',
-            'Viết script Selenium',            'Vẽ BPMN',
-            'Đọc tài liệu Agile',             'Setup S3 bucket',
-            'Đọc tài liệu',                   'Tìm hiểu Redis',
-            'Setup ELK',                       'Tìm hiểu ML.NET',
-            'Chạy Jmeter',                    'Vẽ Class Diagram',
-            'Setup xong Github Actions',       'Code React Router',
-            'Clear stopwords',                 'Log bug lên Jira',
-            'Làm Wireframe',                   'Build pipeline',
-            'Nghiên cứu Dialogflow',           'Peer review FRS của team'
-          );
-
         INSERT INTO "DailyReports" (
             "InternUserId", "ReportDate", "Content",
             "PlannedTomorrow", "MentorFeedback", "ReviewedByMentorId"
@@ -797,7 +778,12 @@ public static class DbInitializer
             ('U_INTERN_027', v_report_date, 'Làm Wireframe',                       'UI design',        'Ok',                           'U_MENTOR_004'),
             ('U_INTERN_028', v_report_date, 'Build pipeline',                      'Deploy test',      'Ok',                           'U_MENTOR_001'),
             ('U_INTERN_029', v_report_date, 'Nghiên cứu Dialogflow',               'Tạo bot',          'Ok',                           'U_MENTOR_002'),
-            ('U_INTERN_030', v_report_date, 'Peer review FRS của team',            'Hoàn thiện docs',  'Review kỹ phần rule',          'U_MENTOR_004');
+            ('U_INTERN_030', v_report_date, 'Peer review FRS của team',            'Hoàn thiện docs',  'Review kỹ phần rule',          'U_MENTOR_004')
+        ON CONFLICT ("InternUserId", "ReportDate") DO UPDATE SET
+            "Content" = EXCLUDED."Content",
+            "PlannedTomorrow" = EXCLUDED."PlannedTomorrow",
+            "MentorFeedback" = EXCLUDED."MentorFeedback",
+            "ReviewedByMentorId" = EXCLUDED."ReviewedByMentorId";
 
         RAISE NOTICE '✅ AIMS seed data upserted successfully.';
 

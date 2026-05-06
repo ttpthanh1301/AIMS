@@ -11,7 +11,7 @@ public class TaskItem
     // TODO / IN_PROGRESS / DONE / OVERDUE
     public DateTime Deadline { get; set; }
     public decimal? EstimatedHours { get; set; }
-    public DateTime CreateDate { get; set; } = DateTime.UtcNow;
+    public DateTime CreateDate { get; set; }
     public string CreatedByUserId { get; set; } = string.Empty;
 
     public InternAssignment Assignment { get; set; } = null!;

@@ -148,7 +148,7 @@ public class QuizAttemptsController : ControllerBase
                 userAnswer.SelectedOptionId = answer.SelectedOptionId;
                 var isCorrect = selectedOption.IsCorrect;
                 userAnswer.IsCorrect = isCorrect;
-                
+
                 if (isCorrect)
                     totalScore += question.Score;
             }
@@ -159,7 +159,7 @@ public class QuizAttemptsController : ControllerBase
         // ── Tính phần trăm và kết quả ─────────────────────────
         var maxScore = attempt.QuizBank.Questions.Sum(q => q.Score);
         var percent = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-        
+
         // Nếu có câu TEXT chưa chấm, không thể kết luận PASS/FAIL ngay
         bool isPendingReview = pendingTextAnswers > 0;
         var isPassed = isPendingReview ? (bool?)null : (percent >= attempt.QuizBank.PassScore);
@@ -177,8 +177,19 @@ public class QuizAttemptsController : ControllerBase
         var message = isPendingReview
             ? $"✏️ Bài thi của bạn có {pendingTextAnswers} câu hỏi tự luận. Mentor sẽ chấm điểm sớm."
             : isPassed == true
-                ? "🎉 Chúc mừng! Bạn đã vượt qua bài kiểm tra!"
+                ? "✅ Chúc mừng! Bạn đã vượt qua bài kiểm tra này."
                 : $"❌ Chưa đạt. Điểm {Math.Round(percent, 1)}% < {attempt.QuizBank.PassScore}%";
+
+        // Kiểm tra nếu đây là final quiz và course đã hoàn thành
+        var isFinalQuiz = attempt.QuizBank.LessonId == null;
+        var enrollment = await _context.Enrollments
+            .FirstOrDefaultAsync(e => e.CourseId == attempt.QuizBank.CourseId && e.InternUserId == userId);
+        var shouldIssueCertificate = isFinalQuiz && isPassed == true && enrollment?.CompletedDate != null;
+
+        if (shouldIssueCertificate)
+        {
+            message += "\n🎓 Khóa học đã hoàn thành! Chứng chỉ có thể được cấp.";
+        }
 
         return Ok(new
         {
@@ -191,6 +202,9 @@ public class QuizAttemptsController : ControllerBase
             SubmittedAt = attempt.SubmittedAt,
             IsPendingReview = isPendingReview,
             PendingTextAnswers = pendingTextAnswers,
+            IsFinalQuiz = isFinalQuiz,
+            CourseCompletionPercent = enrollment?.CompletionPercent ?? 0,
+            CanIssueCertificate = shouldIssueCertificate,
             Message = message,
         });
     }
@@ -236,6 +250,7 @@ public class QuizAttemptsController : ControllerBase
             .Include(a => a.Answers)
                 .ThenInclude(ans => ans.Question)
             .Include(a => a.QuizBank)
+                .ThenInclude(q => q.Questions)
             .FirstOrDefaultAsync(a => a.Id == attemptId);
 
         if (attempt == null)
@@ -261,14 +276,23 @@ public class QuizAttemptsController : ControllerBase
             hasGradedText = true;
         }
 
-        // Tính lại tổng điểm từ các answer
+        // ────── Tính lại tổng điểm từ TẤT CẢ answer ──────
+        // Quy tắc: IsCorrect == true → tính điểm
+        // - Câu TEXT đã được mentor chấm: dùng MentorScore
+        // - Câu không TEXT (auto-graded): dùng Question.Score
         foreach (var answer in attempt.Answers)
         {
-            if (answer.IsCorrect == true)
+            if (answer.IsCorrect != true) continue;  // Chỉ tính câu đúng
+
+            if (answer.Question.QuestionType == "TEXT")
             {
-                // Nếu là text question, dùng MentorScore, nếu không dùng score tự động
-                var score = answer.MentorScore ?? answer.Question.Score;
-                totalScore += score;
+                // TEXT question: dùng điểm mentor (bắt buộc có vì vừa được chấm)
+                totalScore += answer.MentorScore ?? 0;
+            }
+            else
+            {
+                // SINGLE/MULTIPLE question: dùng điểm đầy đủ của câu
+                totalScore += answer.Question.Score;
             }
         }
 
@@ -286,6 +310,21 @@ public class QuizAttemptsController : ControllerBase
             await _context.SaveChangesAsync();
             await UpdateEnrollmentCompletionAsync(attempt.QuizBank.CourseId, attempt.InternUserId);
 
+            // Kiểm tra nếu đây là final quiz và course đã hoàn thành
+            var isFinalQuiz = attempt.QuizBank.LessonId == null;
+            var enrollment = await _context.Enrollments
+                .FirstOrDefaultAsync(e => e.CourseId == attempt.QuizBank.CourseId && e.InternUserId == attempt.InternUserId);
+            var shouldIssueCertificate = isFinalQuiz && isPassed && enrollment?.CompletedDate != null;
+
+            var message = isPassed
+                ? "✅ Học viên đã vượt qua bài kiểm tra!"
+                : $"⚠️ Học viên chưa đạt. Điểm {Math.Round(percent, 1)}%";
+
+            if (shouldIssueCertificate)
+            {
+                message += "\n🎓 Khóa học đã hoàn thành! Chứng chỉ có thể được cấp.";
+            }
+
             return Ok(new
             {
                 AttemptId = attemptId,
@@ -293,9 +332,10 @@ public class QuizAttemptsController : ControllerBase
                 MaxScore = attempt.QuizBank.Questions.Sum(q => q.Score),
                 Percent = Math.Round(percent, 2),
                 IsPassed = isPassed,
-                Message = isPassed
-                    ? "✅ Học viên đã vượt qua bài kiểm tra!"
-                    : $"⚠️ Học viên chưa đạt. Điểm {Math.Round(percent, 1)}%",
+                IsFinalQuiz = isFinalQuiz,
+                CourseCompletionPercent = enrollment?.CompletionPercent ?? 0,
+                CanIssueCertificate = shouldIssueCertificate,
+                Message = message,
             });
         }
 
@@ -381,6 +421,8 @@ public class QuizAttemptsController : ControllerBase
         return Ok(new
         {
             AttemptId = attemptId,
+            attempt.QuizBankId,
+            attempt.AttemptNumber,
             InternName = $"{attempt.InternUser.FirstName} {attempt.InternUser.LastName}",
             QuizTitle = attempt.QuizBank.Title,
             SubmittedAt = attempt.SubmittedAt,
@@ -402,13 +444,13 @@ public class QuizAttemptsController : ControllerBase
                 .ThenInclude(ans => ans.Question)
             .Include(a => a.InternUser)
             .Include(a => a.QuizBank)
-            .Where(a => a.QuizBankId == quizBankId 
+            .Where(a => a.QuizBankId == quizBankId
                      && a.SubmittedAt != null
                      && a.Answers.Any(ans => ans.Question.QuestionType == "TEXT" && ans.MentorScore == null))
             .OrderByDescending(a => a.SubmittedAt)
             .Select(a => new
             {
-                a.Id,
+                AttemptId = a.Id,
                 a.AttemptNumber,
                 InternName = $"{a.InternUser.FirstName} {a.InternUser.LastName}",
                 a.SubmittedAt,

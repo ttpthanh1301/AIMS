@@ -90,6 +90,12 @@ public class QuizBankVm : QuizBankListVm
     public List<QuizQuestionVm> Questions { get; set; } = new();
 }
 
+public class InternQuizListItemVm : QuizBankVm
+{
+    public int UsedAttempts { get; set; }
+    public int RemainingAttempts { get; set; }
+}
+
 public class QuizQuestionVm
 {
     public int Id { get; set; }

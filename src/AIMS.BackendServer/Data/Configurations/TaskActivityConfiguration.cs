@@ -8,6 +8,10 @@ public class TaskActivityConfiguration : IEntityTypeConfiguration<TaskActivity>
 {
     public void Configure(EntityTypeBuilder<TaskActivity> builder)
     {
+        // Set database default for ChangedAt
+        builder.Property(x => x.ChangedAt)
+            .HasDefaultValueSql("NOW()");
+
         builder.HasOne(x => x.Task)
             .WithMany(t => t.Activities)
             .HasForeignKey(x => x.TaskId)

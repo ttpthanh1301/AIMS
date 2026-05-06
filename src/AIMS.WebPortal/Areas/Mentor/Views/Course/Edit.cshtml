@@ -3,6 +3,23 @@
 @{
     ViewData["Title"] = "Chỉnh sửa Khóa học";
     var uploadImageUrl = Url.Action("UploadImage", "Course", new { area = "Mentor" }) ?? "/Mentor/Course/UploadImage";
+    static string? NormalizeCourseThumbnailUrl(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+
+        var value = input.Trim().Replace("%20", string.Empty);
+        value = new string(value.Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+        return value;
+    }
+
+    var rawThumbnailUrl = NormalizeCourseThumbnailUrl(Model?.ThumbnailUrl);
+    var previewThumbnailUrl = string.IsNullOrWhiteSpace(rawThumbnailUrl)
+        ? string.Empty
+        : Url.Content(rawThumbnailUrl.StartsWith("~/")
+            ? rawThumbnailUrl
+            : rawThumbnailUrl.StartsWith("/")
+                ? $"~{rawThumbnailUrl}"
+                : $"~/{rawThumbnailUrl.TrimStart('/')}");
 }
 
 @section Styles {
@@ -44,11 +61,11 @@
                     <label class="form-label fw-semibold">Preview</label>
                     <div class="border rounded bg-light d-flex align-items-center justify-content-center mentor-course-edit-thumbnail-frame">
                         <img id="thumbnailPreview"
-                             src="@Model?.ThumbnailUrl"
+                             src="@previewThumbnailUrl"
                              alt=""
-                             class="mentor-course-edit-thumbnail-image @(string.IsNullOrWhiteSpace(Model?.ThumbnailUrl) ? "is-hidden" : "")" />
+                             class="mentor-course-edit-thumbnail-image @(string.IsNullOrWhiteSpace(previewThumbnailUrl) ? "is-hidden" : "")" />
                         <span id="thumbnailPlaceholder"
-                              class="text-muted small @(string.IsNullOrWhiteSpace(Model?.ThumbnailUrl) ? "" : "is-hidden")">Chưa có thumbnail</span>
+                              class="text-muted small @(string.IsNullOrWhiteSpace(previewThumbnailUrl) ? "" : "is-hidden")">Chưa có thumbnail</span>
                     </div>
                 </div>
             </div>
@@ -90,6 +107,21 @@
     const thumbnailPreview = document.getElementById('thumbnailPreview');
     const thumbnailPlaceholder = document.getElementById('thumbnailPlaceholder');
 
+    function setPreviewState(url) {
+        if (url) {
+            thumbnailPreview.src = url;
+            thumbnailPreview.classList.remove('is-hidden');
+            thumbnailPlaceholder.classList.add('is-hidden');
+            return;
+        }
+
+        thumbnailPreview.removeAttribute('src');
+        thumbnailPreview.classList.add('is-hidden');
+        thumbnailPlaceholder.classList.remove('is-hidden');
+    }
+
+    setPreviewState(thumbnailPreview.getAttribute('src'));
+
     thumbnailFile?.addEventListener('change', async () => {
         const file = thumbnailFile.files?.[0];
         if (!file) return;
@@ -104,9 +136,7 @@
             if (!response.ok) throw new Error(data.message || 'Upload thất bại');
 
             thumbnailUrl.value = data.url;
-            thumbnailPreview.src = data.url;
-            thumbnailPreview.style.display = 'block';
-            thumbnailPlaceholder.style.display = 'none';
+            setPreviewState(data.url);
             thumbnailStatus.textContent = 'Đã tải thumbnail.';
         } catch (error) {
             thumbnailStatus.textContent = error.message || 'Upload thất bại';

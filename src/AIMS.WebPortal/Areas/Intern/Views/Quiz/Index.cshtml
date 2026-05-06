@@ -1,8 +1,8 @@
 @using AIMS.ViewModels.LMS
-@model List<QuizBankVm>
+@model List<InternQuizListItemVm>
 @{
     ViewData["Title"] = "Bài kiểm tra";
-    var quizzes = Model ?? new List<QuizBankVm>();
+    var quizzes = Model ?? new List<InternQuizListItemVm>();
 }
 
 <h5 class="fw-bold mb-4">
@@ -22,7 +22,7 @@
                 <div class="card-body">
                     <h6 class="fw-bold">@q.Title</h6>
                     <div class="text-muted small mb-3">@q.CourseTitle</div>
-                    <div class="row g-2 text-center mb-3">
+                        <div class="row g-2 text-center mb-3">
                         <div class="col-4">
                             <div class="bg-light rounded p-2">
                                 <div class="fw-bold text-primary">@q.TotalQuestions</div>
@@ -37,15 +37,20 @@
                         </div>
                         <div class="col-4">
                             <div class="bg-light rounded p-2">
-                                <div class="fw-bold text-warning">@q.MaxAttempts</div>
-                                <small class="text-muted">Lần thi</small>
+                                <div class="fw-bold text-warning">@q.RemainingAttempts</div>
+                                <small class="text-muted">Còn lại</small>
                             </div>
                         </div>
                     </div>
+                    <div class="small text-muted mb-3">
+                        Đã thi @q.UsedAttempts/@q.MaxAttempts lần
+                    </div>
                     <form asp-action="Start" method="post">
                         <input type="hidden" name="quizBankId" value="@q.Id" />
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-play-fill me-1"></i>Bắt đầu thi
+                        <button type="submit"
+                                class="btn w-100 @(q.RemainingAttempts > 0 ? "btn-primary" : "btn-secondary")"
+                                disabled="@(q.RemainingAttempts <= 0)">
+                            <i class="bi bi-play-fill me-1"></i>@(q.RemainingAttempts > 0 ? "Bắt đầu thi" : "Hết lượt thi")
                         </button>
                     </form>
                 </div>

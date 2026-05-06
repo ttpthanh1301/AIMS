@@ -35,6 +35,15 @@ public class MappingProfile : Profile
 
         // Command
         CreateMap<Command, CommandVm>();
+
+        // Activity Log
+        CreateMap<ActivityLog, ActivityLogDto>()
+            .ForMember(dest => dest.UserName,
+                opt => opt.MapFrom(src => src.User.UserName))
+            .ForMember(dest => dest.UserEmail,
+                opt => opt.MapFrom(src => src.User.Email))
+            .ForMember(dest => dest.UserFullName,
+                opt => opt.MapFrom(src => $"{src.User.FirstName} {src.User.LastName}"));
     }
 
 }

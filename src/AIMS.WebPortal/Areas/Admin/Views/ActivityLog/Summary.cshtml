@@ -1,0 +1,235 @@
+@{
+    ViewData["Title"] = "Thống kê hoạt động";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Thống kê hoạt động</h3>
+        <p class="text-muted mb-0">Phân tích hoạt động của người dùng trong hệ thống</p>
+    </div>
+    <a class="btn btn-outline-primary" asp-action="Index">
+        <i class="bi bi-list-ul me-2"></i>Xem chi tiết
+    </a>
+</div>
+
+@if (ViewData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        @ViewData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- Date Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-lg-3">
+                <label class="form-label fw-semibold">Từ ngày</label>
+                <input type="date" class="form-control" name="fromDate" />
+            </div>
+            <div class="col-lg-3">
+                <label class="form-label fw-semibold">Đến ngày</label>
+                <input type="date" class="form-control" name="toDate" />
+            </div>
+            <div class="col-lg-6 d-flex align-items-end gap-2">
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="bi bi-funnel me-2"></i>Lọc theo ngày
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1">Tổng hành động</p>
+                        <h4 class="fw-bold mb-0">@(ViewBag.TotalActivities?.ToString() ?? "0")</h4>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-activity text-primary" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1">Người dùng hoạt động</p>
+                        <h4 class="fw-bold mb-0">@(ViewBag.ActiveUsers?.ToString() ?? "0")</h4>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-people text-success" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1">Thao tác trung bình/người</p>
+                        <h4 class="fw-bold mb-0">
+                            @{
+                                var avgActivities = (ViewBag.ActiveUsers > 0) 
+                                    ? Math.Round((double)ViewBag.TotalActivities / (double)ViewBag.ActiveUsers, 2)
+                                    : 0;
+                            }
+                            @avgActivities
+                        </h4>
+                    </div>
+                    <div class="bg-info bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-graph-up text-info" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1">Loại hành động</p>
+                        <h4 class="fw-bold mb-0">@(ViewBag.ActionBreakdown?.Count ?? 0)</h4>
+                    </div>
+                    <div class="bg-warning bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-layers text-warning" style="font-size: 1.5rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Breakdown by Action -->
+@if (ViewBag.ActionBreakdown != null && ViewBag.ActionBreakdown.Count > 0)
+{
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-menu-button-wide me-2"></i>Phân bổ theo hành động
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Hành động</th>
+                                <th class="text-end">Số lần</th>
+                                <th class="text-end">Phần trăm</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var action in ViewBag.ActionBreakdown)
+                            {
+                                var percentage = ViewBag.TotalActivities > 0 
+                                    ? Math.Round((double)action.Count / (double)ViewBag.TotalActivities * 100, 2)
+                                    : 0;
+                                    
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-info">@action.Action</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <strong>@action.Count</strong>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: @(percentage)%">
+                                                @percentage%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Users -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-person-badge me-2"></i>Top 10 người dùng hoạt động nhất
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Người dùng</th>
+                                <th class="text-end">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (ViewBag.TopUsers != null && ViewBag.TopUsers.Count > 0)
+                            {
+                                @foreach (var user in ViewBag.TopUsers)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div>
+                                                <strong>@(user.UserName ?? user.UserId)</strong>
+                                                <small class="text-muted d-block">@user.UserId</small>
+                                            </div>
+                                        </td>
+                                        <td class="text-end">
+                                            <span class="badge bg-primary">@user.Count</span>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-3">
+                                        Không có dữ liệu
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body p-5 text-center text-muted">
+            <i class="bi bi-inbox" style="font-size: 3rem; opacity: 0.3;"></i>
+            <p class="mt-3">Không có dữ liệu thống kê</p>
+        </div>
+    </div>
+}
+
+<style>
+    .progress-bar {
+        font-size: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>

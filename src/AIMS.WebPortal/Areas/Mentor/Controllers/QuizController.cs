@@ -77,6 +77,84 @@ public class QuizController : Controller
         return View(quiz);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> PendingReviews(int quizId)
+    {
+        ViewData["Title"] = "Bài chờ chấm";
+
+        var quiz = await _api.GetAsync<QuizBankVm>($"/api/quizbanks/{quizId}");
+        if (quiz == null)
+        {
+            TempData["Error"] = "Không tìm thấy quiz.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var pendingAttempts = await _api.GetAsync<List<QuizAttemptReviewListVm>>(
+            $"/api/quizattempts/pending-by-quiz?quizBankId={quizId}") ?? new List<QuizAttemptReviewListVm>();
+
+        ViewBag.Quiz = quiz;
+        return View(pendingAttempts);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ReviewAttempt(int attemptId)
+    {
+        ViewData["Title"] = "Chấm bài tự luận";
+
+        var review = await _api.GetAsync<QuizAttemptReviewVm>(
+            $"/api/quizattempts/{attemptId}/pending-reviews");
+
+        if (review == null)
+        {
+            TempData["Error"] = "Không tải được bài làm cần chấm hoặc bài đã được chấm xong.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        return View(review);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReviewAttempt(MentorGradeQuizAttemptInputVm input)
+    {
+        if (input.AttemptId <= 0)
+        {
+            TempData["Error"] = "Dữ liệu chấm bài không hợp lệ.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        input.Gradings = input.Gradings
+            .Where(g => g.AnswerId > 0)
+            .ToList();
+
+        if (!input.Gradings.Any())
+        {
+            TempData["Error"] = "Không có câu trả lời nào để chấm.";
+            return RedirectToAction(nameof(ReviewAttempt), new { attemptId = input.AttemptId });
+        }
+
+        var (success, message) = await _api.PostWithMessageAsync(
+            $"/api/quizattempts/{input.AttemptId}/grade-text-answers",
+            new
+            {
+                gradings = input.Gradings.Select(g => new
+                {
+                    answerId = g.AnswerId,
+                    score = g.Score,
+                    feedback = g.Feedback,
+                })
+            });
+
+        if (success)
+        {
+            TempData["Success"] = message ?? "Đã chấm bài thành công.";
+            return RedirectToAction(nameof(PendingReviews), new { quizId = input.QuizBankId });
+        }
+
+        TempData["Error"] = message ?? "Không thể lưu kết quả chấm bài.";
+        return RedirectToAction(nameof(ReviewAttempt), new { attemptId = input.AttemptId });
+    }
+
     [HttpPost]
     public async Task<IActionResult> AddQuestion(
         int quizId,
@@ -86,27 +164,36 @@ public class QuizController : Controller
         string[] optionTexts,
         string[] isCorrects)
     {
+        // Normalize questionType to lowercase for comparison
+        var normalizedType = (questionType ?? "").ToLower();
+
         var options = new List<object>();
-        for (int i = 0; i < optionTexts.Length; i++)
+
+        // Chỉ xử lý options cho loại câu hỏi không phải text
+        if (normalizedType != "text")
         {
-            var text = optionTexts[i];
-            if (string.IsNullOrWhiteSpace(text)) continue;
-
-            bool correct = i < isCorrects.Length
-                && isCorrects[i] == "true";
-
-            options.Add(new
+            for (int i = 0; i < optionTexts.Length; i++)
             {
-                optionText = text,
-                isCorrect = correct,
-                sortOrder = i + 1,
-            });
-        }
+                var text = optionTexts[i];
+                if (string.IsNullOrWhiteSpace(text)) continue;
 
-        if (!options.Any())
-        {
-            TempData["Error"] = "Vui lòng nhập ít nhất 1 đáp án.";
-            return RedirectToAction("Configure", new { quizId });
+                bool correct = i < isCorrects.Length
+                    && isCorrects[i] == "true";
+
+                options.Add(new
+                {
+                    optionText = text,
+                    isCorrect = correct,
+                    sortOrder = i + 1,
+                });
+            }
+
+            // Chỉ bắt buộc có đáp án nếu không phải loại text
+            if (!options.Any())
+            {
+                TempData["Error"] = "Vui lòng nhập ít nhất 1 đáp án.";
+                return RedirectToAction("Configure", new { quizId });
+            }
         }
 
         var (success, message) = await _api.PostWithMessageAsync($"/api/quizbanks/{quizId}/questions", new

@@ -3,6 +3,15 @@
 @{
     ViewData["Title"] = "Quản lý Khóa học";
     var courses = Model ?? new List<CourseVm>();
+
+    static string? NormalizeCourseThumbnailUrl(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+
+        var value = input.Trim().Replace("%20", string.Empty);
+        value = new string(value.Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+        return value;
+    }
 }
 
 @section Styles {
@@ -36,11 +45,19 @@
 <div class="row g-3">
     @foreach (var c in courses)
     {
+        var rawThumbnailUrl = NormalizeCourseThumbnailUrl(c.ThumbnailUrl);
+        var thumbnailUrl = string.IsNullOrWhiteSpace(rawThumbnailUrl)
+            ? null
+            : Url.Content(rawThumbnailUrl.StartsWith("~/")
+                ? rawThumbnailUrl
+                : rawThumbnailUrl.StartsWith("/")
+                    ? $"~{rawThumbnailUrl}"
+                    : $"~/{rawThumbnailUrl.TrimStart('/')}");
         <div class="col-md-6 col-xl-4">
                 <div class="card border-0 shadow-sm h-100">
-                @if (!string.IsNullOrWhiteSpace(c.ThumbnailUrl))
+                @if (!string.IsNullOrWhiteSpace(thumbnailUrl))
                 {
-                    <img src="@c.ThumbnailUrl" class="card-img-top mentor-course-thumbnail" alt="@c.Title" />
+                    <img src="@thumbnailUrl" class="card-img-top mentor-course-thumbnail" alt="@c.Title" />
                 }
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
