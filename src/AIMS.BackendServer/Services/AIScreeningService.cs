@@ -123,38 +123,38 @@ public class AIScreeningService : IAIScreeningService
             string cvText,
             string jobDescriptionText,
             decimal? candidateGpa = null)
+    {
+        var normalizedCv = NormalizeWhitespace(cvText);
+        var normalizedJd = NormalizeWhitespace(jobDescriptionText);
+
+        var cvTokens = Tokenize(normalizedCv);
+        var jdTokens = Tokenize(normalizedJd);
+        var vocabulary = cvTokens.Union(jdTokens, StringComparer.OrdinalIgnoreCase).Distinct().ToList();
+
+        var cvVector = ComputeTfIdf(cvTokens, vocabulary, new[] { cvTokens, jdTokens });
+        var jdVector = ComputeTfIdf(jdTokens, vocabulary, new[] { cvTokens, jdTokens });
+        var cosineScore = CosineSimilarity(cvVector, jdVector);
+
+        var jdSkills = ExtractSkills(normalizedJd);
+        var cvSkills = ExtractSkills(normalizedCv);
+        var matched = jdSkills.Intersect(cvSkills, StringComparer.OrdinalIgnoreCase).ToList();
+        var missing = jdSkills.Except(cvSkills, StringComparer.OrdinalIgnoreCase).ToList();
+
+        decimal? gpaValue = candidateGpa ?? ExtractGpa(normalizedCv);
+        var years = ExtractYearsOfExperience(normalizedCv);
+
+        var feature = new AIMS.BackendServer.Services.ML.FeatureData
         {
-            var normalizedCv = NormalizeWhitespace(cvText);
-            var normalizedJd = NormalizeWhitespace(jobDescriptionText);
+            SkillsMatchedCount = matched.Count,
+            MissingSkillsCount = missing.Count,
+            Gpa = (float)(gpaValue ?? 0m),
+            YearsOfExperience = years,
+            CosineSimilarity = (float)cosineScore,
+            Label = false // placeholder when extracting; caller can set label before export
+        };
 
-            var cvTokens = Tokenize(normalizedCv);
-            var jdTokens = Tokenize(normalizedJd);
-            var vocabulary = cvTokens.Union(jdTokens, StringComparer.OrdinalIgnoreCase).Distinct().ToList();
-
-            var cvVector = ComputeTfIdf(cvTokens, vocabulary, new[] { cvTokens, jdTokens });
-            var jdVector = ComputeTfIdf(jdTokens, vocabulary, new[] { cvTokens, jdTokens });
-            var cosineScore = CosineSimilarity(cvVector, jdVector);
-
-            var jdSkills = ExtractSkills(normalizedJd);
-            var cvSkills = ExtractSkills(normalizedCv);
-            var matched = jdSkills.Intersect(cvSkills, StringComparer.OrdinalIgnoreCase).ToList();
-            var missing = jdSkills.Except(cvSkills, StringComparer.OrdinalIgnoreCase).ToList();
-
-            decimal? gpaValue = candidateGpa ?? ExtractGpa(normalizedCv);
-            var years = ExtractYearsOfExperience(normalizedCv);
-
-            var feature = new AIMS.BackendServer.Services.ML.FeatureData
-            {
-                SkillsMatchedCount = matched.Count,
-                MissingSkillsCount = missing.Count,
-                Gpa = (float)(gpaValue ?? 0m),
-                YearsOfExperience = years,
-                CosineSimilarity = (float)cosineScore,
-                Label = false // placeholder when extracting; caller can set label before export
-            };
-
-            return Task.FromResult(feature);
-        }
+        return Task.FromResult(feature);
+    }
 
     public async Task<AIScreeningResult> ScreenCVAsync(
         string cvText,
@@ -373,7 +373,6 @@ public class AIScreeningService : IAIScreeningService
         var normalizedAlias = Regex.Escape(RemoveDiacritics(alias).ToLowerInvariant());
         return Regex.IsMatch(normalizedText, $@"(?<![a-z0-9]){normalizedAlias}(?![a-z0-9])");
     }
-
     private static string? ExtractSection(string text, string[] sectionKeywords)
     {
         var lines = text.Split('\n').ToList();
@@ -422,6 +421,7 @@ public class AIScreeningService : IAIScreeningService
             .Max();
     }
 
+
     private static double CalculateGpaScore(decimal? candidateGpa, decimal? minGpa)
     {
         if (!candidateGpa.HasValue)
@@ -441,7 +441,6 @@ public class AIScreeningService : IAIScreeningService
             2 => 0.8,
             >= 3 => 1.0,
         };
-
     private static string NormalizeWhitespace(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
