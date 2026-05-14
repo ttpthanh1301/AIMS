@@ -130,9 +130,6 @@ builder.Services.AddCors(opts => opts.AddPolicy("AllowWebPortal", policy =>
 // ── Build ──────────────────────────────────────────────────
 var app = builder.Build();
 
-// ── Migration + Seed ───────────────────────────────────────
-await InitializeDatabaseAsync(app);
-
 // ── Middleware Pipeline ────────────────────────────────────
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
@@ -153,6 +150,39 @@ app.UseAuthorization();
 app.UseMiddleware<AIMS.BackendServer.Middleware.PermissionMiddleware>();
 app.UseMiddleware<AIMS.BackendServer.Middleware.ActivityLoggingMiddleware>();
 app.MapControllers();
+
+// ── Health check endpoint (required by Cloud Run) ────────────
+app.MapGet("/health", async () =>
+{
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<AimsDbContext>();
+    try
+    {
+        await context.Database.OpenConnectionAsync();
+        await context.Database.CloseConnectionAsync();
+        return Results.Ok("Healthy");
+    }
+    catch
+    {
+        return Results.StatusCode(503);
+    }
+});
+
+// ── Initialize database in the background (non-blocking) ────
+_ = Task.Run(async () =>
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        logger.LogInformation("🔄 Starting background database initialization...");
+        await InitializeDatabaseAsync(app);
+        logger.LogInformation("✅ Background database initialization completed");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "⚠️ Background database initialization failed. API will continue running.");
+    }
+});
 
 app.Run();
 

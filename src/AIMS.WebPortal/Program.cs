@@ -47,4 +47,7 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+// ── Health check endpoint (required by Cloud Run) ────────────
+app.MapGet("/health", () => Results.Ok("Healthy"));
+
 app.Run();

@@ -1,0 +1,107 @@
+substitutions:
+  _REGION: asia-southeast1
+  _REPOSITORY: aims-repo
+  _API_SERVICE: aims-api
+  _WEB_SERVICE: aims-web
+  _API_IMAGE: aims-api
+  _WEB_IMAGE: aims-web
+  _ASPNETCORE_ENVIRONMENT: Production
+  _DB_CONNECTION_SECRET: aims-db-connection
+  _JWT_KEY_SECRET: aims-jwt-key
+  _JWT_ISSUER: AIMS.BackendServer
+  _JWT_AUDIENCE: AIMS.WebPortal
+  _MAX_INSTANCES: "1"
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-api
+    args:
+      - build
+      - -f
+      - src/AIMS.BackendServer/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-web
+    args:
+      - build
+      - -f
+      - src/AIMS.WebPortal/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-api-sha
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:$BUILD_ID
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-api-latest
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:latest
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-web-sha
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:$BUILD_ID
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-web-latest
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:latest
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-api
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run deploy ${_API_SERVICE} \
+          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:$BUILD_ID \
+          --platform managed \
+          --region ${_REGION} \
+          --allow-unauthenticated \
+          --port 8080 \
+          --timeout 3600 \
+          --max-instances ${_MAX_INSTANCES} \
+          --http2 \
+          --startup-cpu-boost \
+          --set-env-vars ASPNETCORE_ENVIRONMENT=${_ASPNETCORE_ENVIRONMENT},JwtSettings__Issuer=${_JWT_ISSUER},JwtSettings__Audience=${_JWT_AUDIENCE},JwtSettings__ExpiryMinutes=60 \
+          --set-secrets ConnectionStrings__DefaultConnection=${_DB_CONNECTION_SECRET}:latest,JwtSettings__Key=${_JWT_KEY_SECRET}:latest
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-web
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        API_URL="$$(gcloud run services describe ${_API_SERVICE} --platform managed --region ${_REGION} --format='value(status.url)')"
+
+        gcloud run deploy ${_WEB_SERVICE} \
+          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:$BUILD_ID \
+          --platform managed \
+          --region ${_REGION} \
+          --allow-unauthenticated \
+          --port 8080 \
+          --timeout 3600 \
+          --max-instances ${_MAX_INSTANCES} \
+          --http2 \
+          --startup-cpu-boost \
+          --set-env-vars ASPNETCORE_ENVIRONMENT=${_ASPNETCORE_ENVIRONMENT},ApiSettings__BaseUrl=$$API_URL
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_API_IMAGE}:latest
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_WEB_IMAGE}:latest

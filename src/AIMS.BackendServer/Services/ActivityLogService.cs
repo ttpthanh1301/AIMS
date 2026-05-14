@@ -1,4 +1,4 @@
-gotusing AIMS.BackendServer.Data;
+using AIMS.BackendServer.Data;
 using AIMS.BackendServer.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
