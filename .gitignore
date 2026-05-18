@@ -371,3 +371,4 @@ ai-service/.env
 
 # Local secrets
 appsettings.Development.json
+*.apps.googleusercontent.com.json
