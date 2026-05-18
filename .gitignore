@@ -270,6 +270,7 @@ ServiceFabricBackup/
 *- [Bb]ackup.rdl
 *- [Bb]ackup ([0-9]).rdl
 *- [Bb]ackup ([0-9][0-9]).rdl
+client_secret*.json
 
 # Microsoft Fakes
 FakesAssemblies/

@@ -11,6 +11,7 @@ substitutions:
   _JWT_ISSUER: AIMS.BackendServer
   _JWT_AUDIENCE: AIMS.WebPortal
   _MAX_INSTANCES: "1"
+  _CLOUDSQL_INSTANCE: aims-495102:asia-southeast1:free-trial-first-project
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -75,6 +76,7 @@ steps:
           --port 8080 \
           --timeout 3600 \
           --max-instances ${_MAX_INSTANCES} \
+          --add-cloudsql-instances ${_CLOUDSQL_INSTANCE} \
           --http2 \
           --startup-cpu-boost \
           --set-env-vars ASPNETCORE_ENVIRONMENT=${_ASPNETCORE_ENVIRONMENT},JwtSettings__Issuer=${_JWT_ISSUER},JwtSettings__Audience=${_JWT_AUDIENCE},JwtSettings__ExpiryMinutes=60 \
